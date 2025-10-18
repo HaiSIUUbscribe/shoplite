@@ -1,0 +1,121 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.product-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+.product-img {
+  transition: transform 0.4s ease;
+}
+
+.product-card:hover .product-img {
+  transform: scale(1.05);
+}
+.hover-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.hover-card:hover .card-img-top {
+  transform: scale(1.05);
+}
+
+button.btn-outline-primary:hover {
+  background-color: #0d6efd;
+  color: white;
+}
+
+#main_header{
+  z-index: 1050;
+}
+
+/* ====== Header / Navbar Styles ====== */
+.main-navbar {
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.95rem;
+}
+
+/* Logo */
+.brand-logo {
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: #0d6efd !important;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+}
+
+/* Navigation links */
+.main-nav .nav-link {
+  font-weight: 500;
+  color: #333 !important;
+  transition: all 0.2s ease-in-out;
+  margin: 0 0.4rem;
+  padding-bottom: 4px;
+  border-bottom: 2px solid transparent;
+}
+
+.main-nav .nav-link:hover {
+  color: #0d6efd !important;
+  border-bottom: 2px solid #0d6efd;
+}
+
+.main-nav .nav-link.active {
+  color: #0d6efd !important;
+  font-weight: 600;
+  border-bottom: 2px solid #0d6efd;
+}
+
+/* Cart icon + badge */
+.cart-icon {
+  position: relative;
+}
+
+.cart-badge {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  transform: translate(-50%, -40%);
+  font-size: 0.65em;
+  padding: 0.35em 0.5em;
+}
+
+/* Dropdown user */
+.user-dropdown {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: #333;
+}
+
+.user-dropdown:hover {
+  color: #0d6efd;
+}
+
+/* Auth buttons */
+.auth-btn {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+}
+
+.auth-btn:hover {
+  transform: translateY(-1px);
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
