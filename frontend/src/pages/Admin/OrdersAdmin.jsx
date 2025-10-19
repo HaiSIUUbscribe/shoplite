@@ -18,7 +18,7 @@ export default function OrdersAdmin() {
       setLoading(true);
       const token = localStorage.getItem("token");
 
-      const res = await axios.get("http://localhost:3600/api/orders", {
+      const res = await axios.get("https://shoplite-vwur.onrender.com/api/orders", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -41,7 +41,7 @@ export default function OrdersAdmin() {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:3600/api/orders/${id}/status`,
+        `https://shoplite-vwur.onrender.com/api/orders/${id}/status`,
         { status },
         { headers: { Authorization: `Bearer ${token}` } }
       );

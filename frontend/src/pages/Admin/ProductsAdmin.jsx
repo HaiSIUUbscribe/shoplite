@@ -26,7 +26,7 @@ export default function ProductsAdmin() {
       const token = localStorage.getItem("token");
       const url = useDummy
         ? "https://dummyjson.com/products"
-        : "http://localhost:3600/api/products";
+        : "https://shoplite-vwur.onrender.com/api/products";
 
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -72,7 +72,7 @@ export default function ProductsAdmin() {
     try {
       const url = useDummy
         ? `https://dummyjson.com/products/${id}`
-        : `http://localhost:3600/api/products/${id}`;
+        : `https://shoplite-vwur.onrender.com/api/products/${id}`;
       await axios.delete(url);
       setToastMsg("Xóa sản phẩm thành công!");
       setShowToast(true);
@@ -93,13 +93,13 @@ export default function ProductsAdmin() {
       if (isEditing) {
         const url = useDummy
           ? `https://dummyjson.com/products/${selectedProduct.id}`
-          : `http://localhost:3600/api/products/${selectedProduct.id}`;
+          : `https://shoplite-vwur.onrender.com/api/products/${selectedProduct.id}`;
         await axios.put(url, selectedProduct, { headers });
         setToastMsg("Cập nhật sản phẩm thành công!");
       } else {
         const url = useDummy
           ? "https://dummyjson.com/products/add"
-          : "http://localhost:3600/api/products";
+          : "https://shoplite-vwur.onrender.com/api/products";
         await axios.post(url, selectedProduct, { headers });
         setToastMsg("Thêm sản phẩm mới thành công!");
       }

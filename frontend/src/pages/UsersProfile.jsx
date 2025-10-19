@@ -29,7 +29,7 @@ const UserProfile = () => {
   //Lấy thông tin người dùng hiện tại
   const fetchProfile = async () => {
     try {
-      const res = await axios.get("http://localhost:3600/api/auth/me", {
+      const res = await axios.get("https://shoplite-vwur.onrender.com/api/auth/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setProfile(res.data.user);
@@ -45,7 +45,7 @@ const UserProfile = () => {
   //Lấy danh sách client 
   const fetchClients = async () => {
     try {
-      const res = await axios.get("http://localhost:3600/api/admin/users", {
+      const res = await axios.get("https://shoplite-vwur.onrender.com/api/admin/users", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setClients(res.data);
@@ -61,7 +61,7 @@ const UserProfile = () => {
     setSuccess("");
 
     try {
-      await axios.put("http://localhost:3600/api/auth/update", formData, {
+      await axios.put("https://shoplite-vwur.onrender.com/api/auth/update", formData, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setSuccess("Cập nhật thông tin thành công!");
@@ -82,7 +82,7 @@ const UserProfile = () => {
   const handleSaveClient = async () => {
     try {
       await axios.put(
-        `http://localhost:3600/api/admin/users/${selectedClient.id}`,
+        `https://shoplite-vwur.onrender.com/api/admin/users/${selectedClient.id}`,
         selectedClient,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -101,7 +101,7 @@ const UserProfile = () => {
   const handleDeleteClient = async (id) => {
     if (window.confirm("Bạn có chắc muốn xóa người dùng này không?")) {
       try {
-        await axios.delete(`http://localhost:3600/api/admin/users/${id}`, {
+        await axios.delete(`https://shoplite-vwur.onrender.com/api/admin/users/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         alert("Xóa thành công!");

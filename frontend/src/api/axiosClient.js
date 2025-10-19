@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosClient = axios.create({
-  baseURL: 'http://localhost:3600/api', 
+  baseURL: 'https://shoplite-vwur.onrender.com/api', 
   headers: {
     'Content-Type': 'application/json',
   },

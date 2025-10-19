@@ -14,7 +14,7 @@ const UserOrders = () => {
     const fetchOrders = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get("http://localhost:3600/api/orders/my", {
+        const res = await axios.get("https://shoplite-vwur.onrender.com/api/orders/my", {
           headers: { Authorization: `Bearer ${token}` },
         });
         const parsedOrders = res.data.map((order) => ({

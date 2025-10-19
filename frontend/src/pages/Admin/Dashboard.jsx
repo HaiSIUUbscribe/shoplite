@@ -24,7 +24,7 @@ export default function Dashboard() {
       setLoading(true);
       const token = localStorage.getItem("token");
 
-      const res = await axios.get("http://localhost:3600/api/admin/dashboard", {
+      const res = await axios.get("https://shoplite-vwur.onrender.com/api/admin/dashboard", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
