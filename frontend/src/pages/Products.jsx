@@ -70,19 +70,30 @@ export default function Products() {
   const updateFilter = (name, value) => setFilters((current) => ({ ...current, [name]: value }));
   const clearFilters = () => setFilters(initialFilters);
 
+  const activeChips = [
+    filters.search && { key: 'search', label: `“${filters.search}”` },
+    filters.category && { key: 'category', label: filters.category },
+    filters.minPrice && { key: 'minPrice', label: `Từ ${Number(filters.minPrice).toLocaleString('vi-VN')}đ` },
+    filters.maxPrice && { key: 'maxPrice', label: `Đến ${Number(filters.maxPrice).toLocaleString('vi-VN')}đ` },
+  ].filter(Boolean);
+
   return (
     <main className="catalog-page">
-      <Container>
-        <div className="catalog-header">
-          <span>Danh mục</span>
-          <h1>Tất cả sản phẩm</h1>
-          <p>Khám phá sản phẩm phù hợp theo nhu cầu và ngân sách của bạn.</p>
-        </div>
+      <div className="catalog-hero">
+        <Container>
+          <div className="catalog-hero-inner">
+            <span className="catalog-hero-eyebrow"><i className="bi bi-bag-check" /> Danh mục sản phẩm</span>
+            <h1>Tất cả sản phẩm</h1>
+            <p>Khám phá sản phẩm phù hợp theo nhu cầu và ngân sách của bạn.</p>
+          </div>
+        </Container>
+      </div>
 
+      <Container>
         <div className="search-layout catalog-layout">
           <aside className="search-filters">
             <div className="filter-heading">
-              <h2>Bộ lọc</h2>
+              <h2><i className="bi bi-sliders me-2" />Bộ lọc</h2>
               <Button type="button" variant="link" onClick={clearFilters}>Xóa tất cả</Button>
             </div>
 
@@ -146,7 +157,22 @@ export default function Products() {
           <section className="search-results">
             <div className="results-heading">
               <div><strong>{filtered.length}</strong> sản phẩm</div>
-              {filters.search && <span>Kết quả cho “{filters.search}”</span>}
+              {activeChips.length > 0 && (
+                <div className="active-filter-chips">
+                  {activeChips.map((chip) => (
+                    <span key={chip.key} className="filter-chip">
+                      {chip.label}
+                      <button
+                        type="button"
+                        aria-label="Xóa bộ lọc này"
+                        onClick={() => updateFilter(chip.key, '')}
+                      >
+                        <i className="bi bi-x" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {loading && <div className="page-loader"><Spinner animation="border" /><span>Đang tải sản phẩm...</span></div>}
@@ -154,7 +180,11 @@ export default function Products() {
             {!loading && !error && visibleProducts.length === 0 && <div className="empty-state"><i className="bi bi-search" /><h2>Không tìm thấy sản phẩm</h2><p>Thử mở rộng khoảng giá hoặc chọn danh mục khác.</p><Button type="button" onClick={clearFilters}>Xóa bộ lọc</Button></div>}
 
             <Row className="g-4">
-              {visibleProducts.map((product) => <Col key={product.id} xl={4} sm={6}><ProductCard product={product} /></Col>)}
+              {visibleProducts.map((product, index) => (
+                <Col key={product.id} xl={4} sm={6} style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }} className="product-grid-cell">
+                  <ProductCard product={product} />
+                </Col>
+              ))}
             </Row>
 
             {!loading && totalPages > 1 && <Pagination className="justify-content-center mt-5">

@@ -2,6 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const ExcelJS = require('exceljs');
 const products = require('../controllers/products');
+const newsletter = require('../controllers/newsletter');
+const NewsletterModel = require('../models/NewsletterModel');
+const voucherService = require('../services/voucher');
 const app = require('../server');
 
 function createResponse() {
@@ -114,6 +117,70 @@ test('validates contact messages before attempting email delivery', async () => 
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test('validates newsletter emails before accessing the database', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/api/newsletter/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'invalid-email' }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 422);
+    assert.equal(body.code, 'VALIDATION_ERROR');
+    assert.equal(body.details[0].field, 'email');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('returns a gentle response for an existing newsletter subscriber', async () => {
+  const originalSubscribe = NewsletterModel.subscribe;
+  NewsletterModel.subscribe = async () => ({ status: 'duplicate' });
+  try {
+    const response = createResponse();
+    await newsletter.subscribe({ body: { email: 'reader@example.com' } }, response, failOnNext);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.status, 'duplicate');
+    assert.match(response.body.message, /đã nhận voucher/);
+  } finally {
+    NewsletterModel.subscribe = originalSubscribe;
+  }
+});
+
+test('calculates a newsletter voucher discount with a maximum cap', () => {
+  const voucher = {
+    code: 'SL-TEST123',
+    email: 'reader@example.com',
+    status: 'active',
+    discount_type: 'percent',
+    discount_value: 10,
+    min_order_amount: 500000,
+    max_discount_amount: 100000,
+    expires_at: new Date(Date.now() + 86400000),
+  };
+  const result = voucherService.validateAndCalculate(voucher, 'reader@example.com', 1500000);
+  assert.equal(result.discountAmount, 100000);
+});
+
+test('rejects a voucher used with a different email', () => {
+  const voucher = {
+    code: 'SL-TEST123',
+    email: 'owner@example.com',
+    status: 'active',
+    discount_type: 'percent',
+    discount_value: 10,
+    min_order_amount: 500000,
+    max_discount_amount: 100000,
+    expires_at: new Date(Date.now() + 86400000),
+  };
+  assert.throws(
+    () => voucherService.validateAndCalculate(voucher, 'other@example.com', 600000),
+    (error) => error.code === 'VOUCHER_EMAIL_MISMATCH'
+  );
 });
 
 test('rejects an unsigned VNPay IPN callback', async () => {

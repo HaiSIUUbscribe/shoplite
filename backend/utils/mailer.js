@@ -57,6 +57,32 @@ exports.sendContactMessage = async ({ name, email, phone, subject, message }) =>
   return true;
 };
 
+exports.sendNewsletterVoucher = async ({ to, code, discountValue, minOrderAmount, maxDiscountAmount, expiresAt }) => {
+  const client = getTransporter();
+  if (!client) return false;
+  const expires = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'long' }).format(new Date(expiresAt));
+  const minimum = formatCurrency(minOrderAmount);
+  const maximum = formatCurrency(maxDiscountAmount);
+
+  await client.sendMail({
+    from: process.env.MAIL_FROM || 'ShopLite <no-reply@shoplite.vn>',
+    to,
+    subject: `Voucher chào mừng ${discountValue}% từ ShopLite`,
+    text: `Mã voucher của bạn: ${code}. Giảm ${discountValue}% cho đơn từ ${minimum}, tối đa ${maximum}. Hạn sử dụng: ${expires}. Mã chỉ dùng một lần và chỉ áp dụng với email này.`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#17211d">
+        <h1 style="font-size:24px">Voucher chào mừng từ ShopLite</h1>
+        <p>Cảm ơn bạn đã đăng ký nhận tin. Đây là mã ưu đãi dành riêng cho email của bạn:</p>
+        <div style="margin:24px 0;padding:18px;text-align:center;background:#e8f4ef;border:1px solid #b8d8ca;border-radius:8px">
+          <strong style="font-size:26px;letter-spacing:1px;color:#105e4a">${escapeHtml(code)}</strong>
+        </div>
+        <p>Giảm <strong>${Number(discountValue)}%</strong> cho đơn từ <strong>${minimum}</strong>, tối đa <strong>${maximum}</strong>.</p>
+        <p>Hạn sử dụng: <strong>${expires}</strong>. Mã chỉ dùng một lần và chỉ áp dụng khi email nhận hàng là ${escapeHtml(to)}.</p>
+      </div>`,
+  });
+  return true;
+};
+
 exports.sendOrderConfirmation = async (order) => {
   const client = getTransporter();
   if (!client) return false;
@@ -83,6 +109,8 @@ exports.sendOrderConfirmation = async (order) => {
       `Xin chào ${order.customer_name},`,
       `Đơn hàng #${order.id} đã được ghi nhận.`,
       ...itemLines,
+      `Tạm tính: ${formatCurrency(order.subtotal || order.total)}`,
+      ...(Number(order.discount_amount) > 0 ? [`Voucher ${order.voucher_code}: -${formatCurrency(order.discount_amount)}`] : []),
       `Tổng thanh toán: ${formatCurrency(order.total)}`,
       `Phương thức: ${paymentLabels[order.payment_method] || order.payment_method}`,
       `Địa chỉ nhận hàng: ${order.customer_address}`,
@@ -92,6 +120,8 @@ exports.sendOrderConfirmation = async (order) => {
         <h1 style="font-size:24px">ShopLite đã nhận đơn hàng #${order.id}</h1>
         <p>Xin chào <strong>${escapeHtml(order.customer_name)}</strong>, đơn hàng của bạn đã được ghi nhận thành công.</p>
         <table style="width:100%;border-collapse:collapse">${itemRows}</table>
+        <p>Tạm tính: ${formatCurrency(order.subtotal || order.total)}</p>
+        ${Number(order.discount_amount) > 0 ? `<p>Voucher ${escapeHtml(order.voucher_code)}: <strong>-${formatCurrency(order.discount_amount)}</strong></p>` : ''}
         <p style="font-size:18px"><strong>Tổng thanh toán: ${formatCurrency(order.total)}</strong></p>
         <p>Phương thức: ${escapeHtml(paymentLabels[order.payment_method] || order.payment_method)}</p>
         <p>Giao tới: ${escapeHtml(order.customer_address)}</p>

@@ -2,8 +2,10 @@ const db = require('../db');
 const ProductModel = require('../models/ProductModel');
 const OrderModel = require('../models/OrderModel');
 const TransactionModel = require('../models/TransactionModel');
+const VoucherModel = require('../models/VoucherModel');
 const ApiError = require('../utils/ApiError');
 const vnpayService = require('../services/vnpay');
+const voucherService = require('../services/voucher');
 const { sendOrderConfirmationOnce } = require('../services/orderNotification');
 
 function parseOrderItems(items) {
@@ -55,7 +57,7 @@ exports.createOrder = async (req, res, next) => {
       }
     }
 
-    let total = 0;
+    let subtotal = 0;
     const orderItems = [...requestedLines.values()].map((line) => {
       const product = productById.get(line.product_id);
       const sizes = parseOrderItems(product.sizes);
@@ -67,7 +69,7 @@ exports.createOrder = async (req, res, next) => {
         throw new ApiError(422, `Màu đã chọn cho "${product.title}" không hợp lệ.`, 'INVALID_PRODUCT_COLOR');
       }
       const price = Number(product.price);
-      total += price * line.qty;
+      subtotal += price * line.qty;
       return {
         product_id: product.id,
         title: product.title,
@@ -79,6 +81,16 @@ exports.createOrder = async (req, res, next) => {
       };
     });
 
+    let voucher = null;
+    let voucherResult = null;
+    if (req.body.voucher_code) {
+      const voucherCode = voucherService.normalizeCode(req.body.voucher_code);
+      voucher = await VoucherModel.findByCodeForUpdate(connection, voucherCode);
+      voucherResult = voucherService.validateAndCalculate(voucher, req.body.customer_email, subtotal, req.user.id);
+    }
+    const discountAmount = voucherResult?.discountAmount || 0;
+    const total = subtotal - discountAmount;
+
     for (const [productId, qty] of quantities) {
       await ProductModel.decrementStock(connection, productId, qty);
     }
@@ -88,6 +100,9 @@ exports.createOrder = async (req, res, next) => {
     const orderId = await OrderModel.create(connection, {
       userId: req.user.id,
       items: orderItems,
+      subtotal,
+      discountAmount,
+      voucherCode: voucherResult?.code || null,
       total,
       customerName: req.body.customer_name,
       customerEmail: req.body.customer_email,
@@ -96,6 +111,11 @@ exports.createOrder = async (req, res, next) => {
       paymentMethod,
       paymentStatus,
     });
+
+    if (voucher) {
+      const claimed = await VoucherModel.markUsed(connection, voucher.id, orderId);
+      if (!claimed) throw new ApiError(409, 'Mã voucher vừa được sử dụng ở đơn hàng khác.', 'VOUCHER_USED');
+    }
 
     let paymentUrl = null;
     if (paymentMethod === 'vnpay') {
@@ -119,6 +139,9 @@ exports.createOrder = async (req, res, next) => {
     return res.status(201).json({
       message: paymentUrl ? 'Đã tạo phiên thanh toán VNPay.' : 'Đặt hàng thành công.',
       orderId,
+      subtotal,
+      discountAmount,
+      voucherCode: voucherResult?.code || null,
       total,
       paymentUrl,
     });
@@ -180,6 +203,7 @@ exports.updateStatus = async (req, res, next) => {
       for (const item of parseOrderItems(order.items)) {
         await ProductModel.incrementStock(connection, item.product_id, item.qty);
       }
+      if (order.voucher_code) await VoucherModel.releaseByOrderId(connection, order.id);
     }
     await OrderModel.updateStatus(connection, req.params.id, req.body.status);
     if (req.body.status === 'done' && order.payment_status !== 'paid') {

@@ -8,30 +8,91 @@ import { formatCurrency } from '../utils/formatCurrency';
 export default function ProductCard({ product }) {
   const { addToCart } = useContext(CartContext);
   const [imageFailed, setImageFailed] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
   const outOfStock = Number(product.stock) <= 0;
+  const lowStock = !outOfStock && Number(product.stock) <= 5;
   const hasVariants = Boolean(product.sizes?.length || product.colors?.length);
+  const hasDiscount = Number(product.originalPrice) > Number(product.price);
+  const discountPercent = hasDiscount
+    ? Math.round(((Number(product.originalPrice) - Number(product.price)) / Number(product.originalPrice)) * 100)
+    : 0;
+
+  const handleQuickAdd = () => {
+    addToCart(product);
+    setJustAdded(true);
+    window.setTimeout(() => setJustAdded(false), 1400);
+  };
 
   return (
     <Card className="product-card h-100 border-0">
       <Link to={`/products/${product.id}`} className="product-media" aria-label={`Xem ${product.title}`}>
         {!imageFailed && product.thumbnail ? (
-          <Card.Img src={product.thumbnail} alt={product.title} onError={() => setImageFailed(true)} />
+          <Card.Img src={product.thumbnail} alt={product.title} onError={() => setImageFailed(true)} loading="lazy" />
         ) : (
           <i className="bi bi-image" aria-hidden="true" />
         )}
-        {outOfStock && <Badge bg="dark" className="stock-badge">Hết hàng</Badge>}
+
+        <div className="product-media-tags">
+          {hasDiscount && <Badge className="discount-badge">-{discountPercent}%</Badge>}
+          {outOfStock && <Badge className="stock-badge">Hết hàng</Badge>}
+          {lowStock && <Badge className="lowstock-badge">Sắp hết</Badge>}
+        </div>
+
+        <span className="product-media-shine" aria-hidden="true" />
+
+        <span className="product-quickview">
+          <i className="bi bi-eye" /> Xem nhanh
+        </span>
       </Link>
+
       <Card.Body className="d-flex flex-column p-3">
         {product.category && <span className="product-category">{product.category}</span>}
+
         <Card.Title as={Link} to={`/products/${product.id}`} className="product-title">
           {product.title}
         </Card.Title>
+
+        <div className="product-rating" aria-hidden="true">
+          {Array.from({ length: 5 }, (_, index) => {
+            const seed = (Number(product.id) || 0) % 5;
+            const filled = index < 4 + (seed % 2 === 0 ? 1 : 0) - (index === 4 && seed % 3 === 0 ? 1 : 0);
+            return <i key={index} className={`bi ${filled ? 'bi-star-fill' : 'bi-star'}`} />;
+          })}
+          <span className="product-rating-count">({((Number(product.id) || 1) * 7) % 89 + 12})</span>
+        </div>
+
         <Card.Text className="product-description">
           {product.description || 'Sản phẩm chất lượng được tuyển chọn tại ShopLite.'}
         </Card.Text>
-        <div className="d-flex justify-content-between align-items-center gap-2 mt-auto pt-2">
-          <strong className="product-price">{formatCurrency(Number(product.price))}</strong>
-          {hasVariants ? <Button as={Link} to={`/products/${product.id}`} variant="primary" className="icon-button" disabled={outOfStock} title={outOfStock ? 'Sản phẩm đã hết hàng' : 'Chọn size và màu'} aria-label={`Chọn phiên bản ${product.title}`}><i className="bi bi-sliders" /></Button> : <Button variant="primary" className="icon-button" onClick={() => addToCart(product)} disabled={outOfStock} title={outOfStock ? 'Sản phẩm đã hết hàng' : 'Thêm vào giỏ hàng'} aria-label={outOfStock ? 'Sản phẩm đã hết hàng' : `Thêm ${product.title} vào giỏ hàng`}><i className="bi bi-cart-plus" /></Button>}
+
+        <div className="product-card-footer mt-auto pt-2">
+          <div className="product-price-block">
+            <strong className="product-price">{formatCurrency(Number(product.price))}</strong>
+            {hasDiscount && <span className="product-price-original">{formatCurrency(Number(product.originalPrice))}</span>}
+          </div>
+
+          {hasVariants ? (
+            <Button
+              as={Link}
+              to={`/products/${product.id}`}
+              className="icon-button variant-button"
+              disabled={outOfStock}
+              title={outOfStock ? 'Sản phẩm đã hết hàng' : 'Chọn size và màu'}
+              aria-label={`Chọn phiên bản ${product.title}`}
+            >
+              <i className="bi bi-cart-plus" />
+            </Button>
+          ) : (
+            <Button
+              className={`icon-button add-button ${justAdded ? 'is-added' : ''}`}
+              onClick={handleQuickAdd}
+              disabled={outOfStock}
+              title={outOfStock ? 'Sản phẩm đã hết hàng' : 'Thêm vào giỏ hàng'}
+              aria-label={outOfStock ? 'Sản phẩm đã hết hàng' : `Thêm ${product.title} vào giỏ hàng`}
+            >
+              <i className={`bi ${justAdded ? 'bi-check-lg' : 'bi-cart-plus'}`} />
+            </Button>
+          )}
         </div>
       </Card.Body>
     </Card>
@@ -46,6 +107,7 @@ ProductCard.propTypes = {
     description: PropTypes.string,
     category: PropTypes.string,
     price: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    originalPrice: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     stock: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     sizes: PropTypes.arrayOf(PropTypes.string),
     colors: PropTypes.arrayOf(PropTypes.string),

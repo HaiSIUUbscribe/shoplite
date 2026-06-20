@@ -84,6 +84,11 @@ const orderRules = [
   body('customer_phone').trim().matches(/^[0-9+().\s-]{8,20}$/).withMessage('Số điện thoại không hợp lệ.'),
   body('customer_address').trim().isLength({ min: 10, max: 500 }).withMessage('Địa chỉ phải có từ 10 đến 500 ký tự.'),
   body('payment_method').optional().isIn(['cod', 'bank_transfer', 'vnpay']).withMessage('Phương thức thanh toán không hợp lệ.'),
+  body('voucher_code')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^[A-Za-z0-9-]{6,32}$/)
+    .withMessage('Mã voucher không hợp lệ.'),
 ];
 
 const statusRules = [
@@ -111,6 +116,22 @@ const contactRules = [
   body('message').trim().isLength({ min: 10, max: 3000 }).withMessage('Nội dung phải có từ 10 đến 3.000 ký tự.'),
 ];
 
+const newsletterRules = [
+  body('email')
+    .trim()
+    .normalizeEmail()
+    .isEmail()
+    .withMessage('Email không hợp lệ.')
+    .isLength({ max: 190 })
+    .withMessage('Email không được vượt quá 190 ký tự.'),
+];
+
+const voucherValidationRules = [
+  body('code').trim().matches(/^[A-Za-z0-9-]{6,32}$/).withMessage('Mã voucher không hợp lệ.'),
+  body('email').trim().normalizeEmail().isEmail().withMessage('Email không hợp lệ.'),
+  body('subtotal').isFloat({ min: 0 }).withMessage('Tạm tính đơn hàng không hợp lệ.').toFloat(),
+];
+
 module.exports = {
   validate,
   idRules: [idParam],
@@ -126,4 +147,6 @@ module.exports = {
   adminUserRules,
   changePasswordRules,
   contactRules,
+  newsletterRules,
+  voucherValidationRules,
 };

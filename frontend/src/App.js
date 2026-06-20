@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import MainLayout from './components/Mainlayout';
+import AuthLayout from './components/AuthLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import Home from './pages/Home';
@@ -32,10 +33,6 @@ export default function App() {
       <Route path="products/:id" element={<ProductDetail />} />
       <Route path="contact" element={<Contact />} />
       <Route path="cart" element={<Cart />} />
-      <Route path="login" element={<Login />} />
-      <Route path="register" element={<Register />} />
-      <Route path="forgot-password" element={<ForgotPassword />} />
-      <Route path="reset-password" element={<ResetPassword />} />
       <Route path="checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
       <Route path="orders" element={<ProtectedRoute><UserOrders /></ProtectedRoute>} />
       <Route path="orders/:id" element={<ProtectedRoute><OrderDetail /></ProtectedRoute>} />
@@ -47,6 +44,12 @@ export default function App() {
       <Route path="admin/products" element={<AdminRoute><ProductsAdmin /></AdminRoute>} />
       <Route path="admin/orders" element={<AdminRoute><OrdersAdmin /></AdminRoute>} />
       <Route path="*" element={<NotFound />} />
+    </Route>
+    <Route element={<AuthLayout />}>
+      <Route path="login" element={<Login />} />
+      <Route path="register" element={<Register />} />
+      <Route path="forgot-password" element={<ForgotPassword />} />
+      <Route path="reset-password" element={<ResetPassword />} />
     </Route>
   </Routes></BrowserRouter></CartProvider></AuthProvider>;
 }

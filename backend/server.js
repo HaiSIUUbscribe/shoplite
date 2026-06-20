@@ -9,6 +9,8 @@ const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/admin');
 const contactRoutes = require('./routes/contact');
+const newsletterRoutes = require('./routes/newsletter');
+const voucherRoutes = require('./routes/vouchers');
 const paymentRoutes = require('./routes/payments');
 const { uploadRoot } = require('./middlewares/upload');
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
@@ -61,6 +63,8 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/vouchers', voucherRoutes);
 app.use('/api/payments', paymentRoutes);
 
 app.use(notFound);

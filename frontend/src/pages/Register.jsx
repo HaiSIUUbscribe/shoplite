@@ -1,145 +1,193 @@
-import React, { useState, useContext } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
+import { Alert, Button, Card, Container, Form, InputGroup, Spinner } from 'react-bootstrap';
+import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
-import { Form, Button, Container, Alert, Card, InputGroup, Spinner } from 'react-bootstrap';
-import 'bootstrap-icons/font/bootstrap-icons.css';
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const initialFieldErrors = { name: '', email: '', password: '', confirmPassword: '' };
+
+function getPasswordStrength(password) {
+  if (!password) return { score: 0, label: '' };
+  let score = 0;
+  if (password.length >= 8) score += 1;
+  if (password.length >= 12) score += 1;
+  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
+  if (/\d/.test(password)) score += 1;
+  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+
+  if (score <= 1) return { score: 1, label: 'Yếu' };
+  if (score <= 3) return { score: 2, label: 'Trung bình' };
+  return { score: 3, label: 'Mạnh' };
+}
 
 export default function Register() {
   const { register } = useContext(AuthContext);
   const navigate = useNavigate();
-
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState(initialFieldErrors);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const strength = useMemo(() => getPasswordStrength(password), [password]);
+
+  const clearFieldError = (field) => {
+    if (fieldErrors[field]) setFieldErrors((current) => ({ ...current, [field]: '' }));
+  };
+
+  const validate = () => {
+    const next = { ...initialFieldErrors };
+    if (!name.trim()) next.name = 'Vui lòng nhập họ và tên.';
+    if (!emailPattern.test(email.trim())) next.email = 'Email không hợp lệ.';
+    if (password.length < 8) next.password = 'Mật khẩu cần ít nhất 8 ký tự.';
+    if (confirmPassword !== password) next.confirmPassword = 'Mật khẩu xác nhận không khớp.';
+    setFieldErrors(next);
+    return Object.values(next).every((message) => !message);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError('');
     setSuccess('');
-
-    if (password !== confirmPassword) {
-      setError('Mật khẩu không khớp. Vui lòng thử lại.');
-      return;
-    }
+    if (!validate()) return;
 
     setLoading(true);
-
     try {
       await register(name, email, password);
-      setSuccess('Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
-      setTimeout(() => navigate('/login'), 2000);
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+      setSuccess('Đăng ký thành công. Đang chuyển đến trang đăng nhập...');
+      setTimeout(() => navigate('/login'), 1500);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-page d-flex align-items-center justify-content-center">
-      <Container style={{ maxWidth: '450px' }}>
-        <Card className="auth-card border-0">
-          <Card.Body className="p-4 p-sm-5">
-            <h2 className="text-center fw-bold mb-4">Tạo Tài Khoản</h2>
+    <main className="auth-page register-page">
+      <Container className="auth-narrow">
+        <Card className="auth-card">
+          <Card.Body>
+            <div className="auth-icon"><i className="bi bi-person-plus" /></div>
+            <h1>Tạo tài khoản</h1>
+            <p className="auth-lead">Đăng ký để lưu giỏ hàng và quản lý đơn mua thuận tiện hơn.</p>
 
-            {error && <Alert variant="danger" className="text-center">{error}</Alert>}
-            {success && (
-              <Alert 
-                variant="success" 
-                className="text-center fw-bold" 
-                style={{ color: '#198754', backgroundColor: '#e8f5e9', border: '1px solid #c1e1c1' }}
-              >
-                {success}
-              </Alert>
-            )}
+            {error && <Alert variant="danger" className="auth-alert"><i className="bi bi-exclamation-triangle-fill me-2" />{error}</Alert>}
+            {success && <Alert variant="success" className="auth-alert"><i className="bi bi-check-circle-fill me-2" />{success}</Alert>}
 
-            <Form onSubmit={handleSubmit}>
-              <Form.Group className="mb-3" controlId="name">
-                <Form.Label>Tên của bạn</Form.Label>
-                <InputGroup>
-                  <InputGroup.Text><i className="bi bi-person-fill"></i></InputGroup.Text>
+            <Form onSubmit={handleSubmit} noValidate>
+              <Form.Group className="mb-3" controlId="register-name">
+                <Form.Label>Họ và tên</Form.Label>
+                <InputGroup className={fieldErrors.name ? 'is-invalid-group' : ''}>
+                  <InputGroup.Text><i className="bi bi-person" /></InputGroup.Text>
                   <Form.Control
                     type="text"
                     placeholder="Nhập họ và tên"
                     value={name}
-                    onChange={e => setName(e.target.value)}
-                    required
+                    onChange={(event) => { setName(event.target.value); clearFieldError('name'); }}
+                    autoComplete="name"
+                    isInvalid={Boolean(fieldErrors.name)}
                     disabled={loading}
                   />
                 </InputGroup>
+                {fieldErrors.name && <div className="auth-field-error">{fieldErrors.name}</div>}
               </Form.Group>
 
-              <Form.Group className="mb-3" controlId="email">
+              <Form.Group className="mb-3" controlId="register-email">
                 <Form.Label>Email</Form.Label>
-                <InputGroup>
-                  <InputGroup.Text><i className="bi bi-envelope-fill"></i></InputGroup.Text>
+                <InputGroup className={fieldErrors.email ? 'is-invalid-group' : ''}>
+                  <InputGroup.Text><i className="bi bi-envelope" /></InputGroup.Text>
                   <Form.Control
                     type="email"
                     placeholder="Nhập email"
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
+                    onChange={(event) => { setEmail(event.target.value); clearFieldError('email'); }}
+                    autoComplete="email"
+                    isInvalid={Boolean(fieldErrors.email)}
                     disabled={loading}
                   />
                 </InputGroup>
+                {fieldErrors.email && <div className="auth-field-error">{fieldErrors.email}</div>}
               </Form.Group>
 
-              <Form.Group className="mb-3" controlId="password">
+              <Form.Group className="mb-2" controlId="register-password">
                 <Form.Label>Mật khẩu</Form.Label>
-                <InputGroup>
-                  <InputGroup.Text><i className="bi bi-lock-fill"></i></InputGroup.Text>
+                <InputGroup className={fieldErrors.password ? 'is-invalid-group' : ''}>
+                  <InputGroup.Text><i className="bi bi-lock" /></InputGroup.Text>
                   <Form.Control
-                    type="password"
-                    placeholder="Tạo mật khẩu"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Tối thiểu 8 ký tự"
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    required
+                    onChange={(event) => { setPassword(event.target.value); clearFieldError('password'); }}
+                    autoComplete="new-password"
+                    isInvalid={Boolean(fieldErrors.password)}
                     disabled={loading}
                   />
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    className="auth-toggle-visibility"
+                    onClick={() => setShowPassword((value) => !value)}
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  >
+                    <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`} />
+                  </Button>
                 </InputGroup>
+                {fieldErrors.password && <div className="auth-field-error">{fieldErrors.password}</div>}
+                {password && !fieldErrors.password && (
+                  <div className="password-strength">
+                    <div className="password-strength-bars">
+                      <span className={strength.score >= 1 ? `active level-${strength.score}` : ''} />
+                      <span className={strength.score >= 2 ? `active level-${strength.score}` : ''} />
+                      <span className={strength.score >= 3 ? `active level-${strength.score}` : ''} />
+                    </div>
+                    <span className={`password-strength-label level-${strength.score}`}>{strength.label}</span>
+                  </div>
+                )}
               </Form.Group>
 
-              <Form.Group className="mb-4" controlId="confirmPassword">
+              <Form.Group className="mb-4" controlId="register-confirm-password">
                 <Form.Label>Xác nhận mật khẩu</Form.Label>
-                <InputGroup>
-                  <InputGroup.Text><i className="bi bi-lock-fill"></i></InputGroup.Text>
+                <InputGroup className={fieldErrors.confirmPassword ? 'is-invalid-group' : ''}>
+                  <InputGroup.Text><i className="bi bi-shield-lock" /></InputGroup.Text>
                   <Form.Control
-                    type="password"
+                    type={showConfirmPassword ? 'text' : 'password'}
                     placeholder="Nhập lại mật khẩu"
                     value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    required
+                    onChange={(event) => { setConfirmPassword(event.target.value); clearFieldError('confirmPassword'); }}
+                    autoComplete="new-password"
+                    isInvalid={Boolean(fieldErrors.confirmPassword)}
                     disabled={loading}
                   />
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    className="auth-toggle-visibility"
+                    onClick={() => setShowConfirmPassword((value) => !value)}
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  >
+                    <i className={`bi ${showConfirmPassword ? 'bi-eye-slash' : 'bi-eye'}`} />
+                  </Button>
                 </InputGroup>
+                {fieldErrors.confirmPassword && <div className="auth-field-error">{fieldErrors.confirmPassword}</div>}
               </Form.Group>
 
-              <div className="d-grid">
-                <Button variant="primary" type="submit" disabled={loading} size="lg">
-                  {loading ? (
-                    <>
-                      <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />
-                      <span className="ms-2">Đang tạo tài khoản...</span>
-                    </>
-                  ) : (
-                    'Đăng Ký'
-                  )}
-                </Button>
-              </div>
+              <Button type="submit" size="lg" className="w-100 auth-submit" disabled={loading}>
+                {loading ? <><Spinner animation="border" size="sm" className="me-2" />Đang tạo tài khoản...</> : <><i className="bi bi-person-check me-2" />Đăng ký</>}
+              </Button>
             </Form>
 
-            <div className="text-center mt-4">
-              <span className="text-muted">Đã có tài khoản? </span>
-              <Link to="/login">Đăng nhập</Link>
-            </div>
+            <div className="login-register-link"><span>Đã có tài khoản?</span><Link to="/login">Đăng nhập</Link></div>
           </Card.Body>
         </Card>
       </Container>
-    </div>
+    </main>
   );
 }

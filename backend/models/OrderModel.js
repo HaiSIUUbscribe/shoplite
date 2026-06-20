@@ -3,11 +3,14 @@ const db = require('../db');
 exports.create = async (connection, order) => {
   const [result] = await connection.query(
     `INSERT INTO orders
-      (user_id, items, total, status, customer_name, customer_email, customer_phone, customer_address, payment_method, payment_status)
-     VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+      (user_id, items, subtotal, discount_amount, voucher_code, total, status, customer_name, customer_email, customer_phone, customer_address, payment_method, payment_status)
+     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
     [
       order.userId,
       JSON.stringify(order.items),
+      order.subtotal,
+      order.discountAmount,
+      order.voucherCode,
       order.total,
       order.customerName,
       order.customerEmail,
@@ -48,7 +51,7 @@ exports.findAllWithUsers = async () => {
 
 exports.findByIdForUpdate = async (connection, id) => {
   const [rows] = await connection.query(
-    'SELECT id, status, items, payment_method, payment_status FROM orders WHERE id = ? FOR UPDATE',
+    'SELECT id, status, items, payment_method, payment_status, voucher_code FROM orders WHERE id = ? FOR UPDATE',
     [id]
   );
   return rows[0] || null;

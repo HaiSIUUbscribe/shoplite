@@ -1,4 +1,10 @@
+import axios from 'axios';
 import axiosClient from '../api/axiosClient';
+
+const locationClient = axios.create({
+  baseURL: 'https://provinces.open-api.vn/api',
+  timeout: 15000,
+});
 
 export const authService = {
   login: (email, password) => axiosClient.post('/auth/login', { email, password }).then((response) => response.data),
@@ -46,6 +52,23 @@ export const orderService = {
 
 export const contactService = {
   send: (message) => axiosClient.post('/contact', message).then((response) => response.data),
+};
+
+export const newsletterService = {
+  subscribe: (email) => axiosClient.post('/newsletter/subscribe', { email }).then((response) => response.data),
+};
+
+export const voucherService = {
+  claim: () => axiosClient.post('/vouchers/claim').then((response) => response.data),
+  validate: (code, email, subtotal) => axiosClient.post('/vouchers/validate', {
+    code,
+    email,
+    subtotal,
+  }).then((response) => response.data),
+};
+
+export const locationService = {
+  getVietnamLocations: () => locationClient.get('/', { params: { depth: 3 } }).then((response) => response.data),
 };
 
 export const adminService = {
