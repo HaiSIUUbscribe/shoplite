@@ -1,137 +1,26 @@
-import React, { useEffect, useState } from "react";
-import { Container, Row, Col, Carousel, Spinner, Button, Card } from "react-bootstrap";
-import { Link } from "react-router-dom";
-import ProductCard from "../components/ProductCard";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Carousel, Col, Container, Row, Spinner } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
+import { productService } from '../services/api';
+import ProductCard from '../components/ProductCard';
 
-const Home = () => {
+export default function Home() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => { productService.list({ sort: 'newest' }).then(setProducts).catch(() => setError('Chưa thể tải sản phẩm. Vui lòng thử lại sau.')).finally(() => setLoading(false)); }, []);
+  const heroProducts = products.filter((product) => product.thumbnail).slice(0, 3);
+  const categories = useMemo(() => [...new Set(products.map((product) => product.category).filter(Boolean))].slice(0, 6), [products]);
 
-  useEffect(() => {
-    fetch("https://dummyjson.com/products")
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error('Không thể kết nối đến máy chủ.');
-        }
-        return res.json();
-      })
-      .then((data) => {
-        setProducts(data.products.slice(0, 12));
-      })
-      .catch((err) => {
-        console.error("Lỗi khi tải sản phẩm:", err);
-        setError("Không thể tải được sản phẩm. Vui lòng thử lại sau.");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
-  
-  const renderProductList = () => {
-    if (loading) {
-      return (
-        <div className="text-center py-5">
-          <Spinner animation="border" variant="primary" style={{ width: '3rem', height: '3rem' }} />
-          <p className="mt-3 lead">Đang tải sản phẩm...</p>
-        </div>
-      );
-    }
-
-    if (error) {
-      return <div className="text-center py-5 alert alert-danger">{error}</div>;
-    }
-
-    return (
-      <Row className="g-4">
-        {products.map((product) => (
-          <Col md={3} sm={6} xs={12} key={product.id}>
-            <ProductCard product={product} />
-          </Col>
-        ))}
-      </Row>
-    );
-  };
-
-  return (
-    <>
-
-      {/* === Section: Carousel Banner === */}
-      <Carousel fade interval={4000}>
-        <Carousel.Item>
-          <img
-            className="d-block w-100"
-            src="https://media.routine.vn/3800x0/prod/media/desktop-banner-web-fall-25-01-png-n7s2.webp"
-            alt="Thời trang mùa thu"
-            style={{ height: "450px", objectFit: "cover" }}
-          />
-          <Carousel.Caption className="bg-dark bg-opacity-50 rounded p-3">
-            <h3>Chào mừng đến với ShopLite</h3>
-            <p>Khám phá hàng ngàn sản phẩm chất lượng cao.</p>
-          </Carousel.Caption>
-        </Carousel.Item>
-        <Carousel.Item>
-          <img
-            className="d-block w-100"
-            src="https://jysk.vn/media/catalog/category/MKT/Banner/1352x536__KVSN10T_PK_VIE.png"
-            alt="Ưu đãi mỗi ngày"
-            style={{ height: "450px", objectFit: "cover" }}
-          />
-          <Carousel.Caption className="bg-dark bg-opacity-50 rounded p-3">
-            <h3>Giá Tốt Mỗi Ngày</h3>
-            <p>Ưu đãi đặc biệt dành riêng cho bạn.</p>
-          </Carousel.Caption>
-        </Carousel.Item>
-      </Carousel>
-
-      {/* === Section: Features (Điểm nổi bật của dịch vụ) === */}
-      <Container className="my-5">
-        <Row className="text-center g-4">
-            <Col md={4}>
-                <Card className="border-0 bg-transparent">
-                    <Card.Body>
-                        <i className="bi bi-truck h1 text-primary"></i>
-                        <h4 className="fw-bold mt-2">Giao Hàng Nhanh</h4>
-                        <p className="text-muted">Miễn phí vận chuyển cho tất cả đơn hàng trên 500.000đ.</p>
-                    </Card.Body>
-                </Card>
-            </Col>
-            <Col md={4}>
-                <Card className="border-0 bg-transparent">
-                    <Card.Body>
-                        <i className="bi bi-headset h1 text-primary"></i>
-                        <h4 className="fw-bold mt-2">Hỗ Trợ 24/7</h4>
-                        <p className="text-muted">Luôn sẵn sàng giải đáp mọi thắc mắc của bạn.</p>
-                    </Card.Body>
-                </Card>
-            </Col>
-            <Col md={4}>
-                <Card className="border-0 bg-transparent">
-                    <Card.Body>
-                        <i className="bi bi-shield-check h1 text-primary"></i>
-                        <h4 className="fw-bold mt-2">Thanh Toán An Toàn</h4>
-                        <p className="text-muted">Bảo mật tuyệt đối thông tin thanh toán của bạn.</p>
-                    </Card.Body>
-                </Card>
-            </Col>
-        </Row>
-      </Container>
-      
-      {/* === Section: Products === */}
-      <div className="bg-light py-5">
-        <Container>
-            <h2 className="text-center fw-bold mb-5 display-5">Sản Phẩm Nổi Bật</h2>
-            {renderProductList()}
-            <div className="text-center mt-5">
-                <Button as={Link} to="/products" variant="primary" size="lg">
-                  Xem tất cả sản phẩm <i className="bi bi-arrow-right"></i>
-                </Button>
-            </div>
-        </Container>
-      </div>
-
-    </>
-  );
-};
-
-export default Home;
+  return <>
+    <section className="home-hero" aria-label="Sản phẩm nổi bật">
+      {loading ? <div className="hero-loading"><Spinner animation="border" variant="light" /></div> : heroProducts.length ? <Carousel fade interval={5500} pause="hover">
+        {heroProducts.map((product, index) => <Carousel.Item key={product.id}><div className="hero-slide" style={{ backgroundImage: `url(${JSON.stringify(product.thumbnail).slice(1, -1)})` }}><div className="hero-shade" /><Container className="hero-copy"><span>{index === 0 ? 'Lựa chọn mới tại ShopLite' : product.category || 'Được yêu thích'}</span><h1>{index === 0 ? 'Mua sắm nhẹ nhàng. Nhận hàng an tâm.' : product.title}</h1><p>{product.description || 'Giá rõ ràng, tồn kho cập nhật và theo dõi đơn hàng thuận tiện.'}</p><div><Button as={Link} to={`/products/${product.id}`} variant="light" size="lg">Xem sản phẩm <i className="bi bi-arrow-right" /></Button><Button as={Link} to="/products" variant="outline-light" size="lg">Tìm kiếm</Button></div></Container></div></Carousel.Item>)}
+      </Carousel> : <div className="hero-slide hero-fallback"><Container className="hero-copy"><span>ShopLite</span><h1>Mua sắm nhẹ nhàng. Nhận hàng an tâm.</h1><p>Sản phẩm thiết thực, giá rõ ràng và quy trình đặt hàng gọn nhẹ.</p><Button as={Link} to="/products" variant="light" size="lg">Khám phá sản phẩm</Button></Container></div>}
+    </section>
+    <section className="service-band"><Container><Row className="g-3"><Col md={4}><div className="service-item"><i className="bi bi-truck" /><div><strong>Giao hàng toàn quốc</strong><span>Theo dõi từng trạng thái đơn</span></div></div></Col><Col md={4}><div className="service-item"><i className="bi bi-arrow-repeat" /><div><strong>Hỗ trợ sau mua</strong><span>Phản hồi trong 24 giờ làm việc</span></div></div></Col><Col md={4}><div className="service-item"><i className="bi bi-shield-check" /><div><strong>Thanh toán minh bạch</strong><span>Tổng tiền xác nhận từ hệ thống</span></div></div></Col></Row></Container></section>
+    {categories.length > 0 && <section className="category-rail"><Container><div className="section-heading"><div><span>Mua theo nhu cầu</span><h2>Danh mục phổ biến</h2></div></div><div className="category-links">{categories.map((category, index) => <Link key={category} to={`/products?category=${encodeURIComponent(category)}`}><i className={`bi ${['bi-bag','bi-phone','bi-house','bi-watch','bi-headphones','bi-gift'][index]}`} /><span>{category}</span><i className="bi bi-arrow-up-right" /></Link>)}</div></Container></section>}
+    <section className="product-section"><Container><div className="section-heading"><div><span>Vừa lên kệ</span><h2>Sản phẩm mới nhất</h2></div><Button as={Link} to="/products" variant="outline-dark">Xem tất cả <i className="bi bi-arrow-right ms-2" /></Button></div>{error && <Alert variant="danger">{error}</Alert>}{!loading && !error && !products.length && <div className="empty-state"><i className="bi bi-box-seam" /><h3>Gian hàng đang được cập nhật</h3></div>}<Row className="g-4">{products.slice(0, 8).map((product) => <Col key={product.id} xl={3} md={4} sm={6}><ProductCard product={product} /></Col>)}</Row></Container></section>
+    <section className="trust-story"><Container><div><span>Một nơi cho cả hành trình mua sắm</span><h2>Từ lúc tìm thấy sản phẩm đến khi nhận hàng</h2></div><div className="trust-metrics"><div><strong>01</strong><span>Tìm kiếm và lọc nhanh</span></div><div><strong>02</strong><span>Tồn kho cập nhật tức thời</span></div><div><strong>03</strong><span>Theo dõi đơn rõ ràng</span></div></div></Container></section>
+  </>;
+}

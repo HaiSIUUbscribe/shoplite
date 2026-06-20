@@ -1,244 +1,79 @@
-import React, { useEffect, useState } from "react";
-import {Container,Card,Spinner,Alert,Accordion,ListGroup,Row,Col,Image,Badge,Button } from "react-bootstrap";
-import axios from "axios";
-import { formatCurrency } from "../utils/formatCurrency";
-import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import React, { useEffect, useState } from 'react';
+import { Accordion, Alert, Badge, Button, Col, Container, Image, ListGroup, Row, Spinner } from 'react-bootstrap';
+import { Link, useLocation } from 'react-router-dom';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+import { orderService } from '../services/api';
+import { formatCurrency } from '../utils/formatCurrency';
+import { orderStatuses } from '../utils/orderStatus';
+import { paymentMethodLabels, paymentStatusLabels } from '../utils/payment';
 
-const UserOrders = () => {
+export default function UserOrders() {
+  const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get("https://shoplite-vwur.onrender.com/api/orders/my", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const parsedOrders = res.data.map((order) => ({
-          ...order,
-          items:
-            typeof order.items === "string"
-              ? JSON.parse(order.items)
-              : order.items || [],
-        }));
-        setOrders(parsedOrders);
-      } catch (err) {
-        console.error("Lỗi khi lấy đơn hàng:", err);
-        setError("Không thể tải danh sách đơn hàng.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchOrders();
+    orderService.getMine()
+      .then((data) => setOrders(data))
+      .catch(() => setError('Không thể tải danh sách đơn hàng.'))
+      .finally(() => setLoading(false));
   }, []);
 
-  const getStatusBadgeVariant = (status) => {
-    switch (status) {
-      case "pending":
-        return "warning";
-      case "processing":
-        return "info";
-      case "done":
-        return "success";
-      case "cancelled":
-        return "danger";
-      default:
-        return "secondary";
-    }
-  };
-
-  //Xuất PDF
-  const handleDownloadPDF = (order) => {
+  const downloadInvoice = (order) => {
     const doc = new jsPDF();
-
-    // Tiêu đề
     doc.setFontSize(18);
-    doc.text("HOA DON MUA HANG", 105, 20, { align: "center" });
-
-    // Thông tin đơn hàng
-    doc.setFontSize(12);
-    doc.text(`MA don hang: #${order.id}`, 14, 35);
-    doc.text(
-      `Ngay dat: ${new Date(order.created_at).toLocaleString("vi-VN")}`,
-      14,
-      42
-    );
-    doc.text(`Trang thai: ${order.status.toUpperCase()}`, 14, 49);
-
-    // Bảng sản phẩm
-    const tableBody = order.items.map((item, index) => [
-      index + 1,
-      item.title || item.name || "Không rõ",
-      item.qty || item.quantity || 1,
-      formatCurrency(item.price),
-      formatCurrency(item.price * (item.qty || item.quantity || 1)),
-    ]);
-
+    doc.text('SHOPLITE - HOA DON MUA HANG', 105, 20, { align: 'center' });
+    doc.setFontSize(11);
+    doc.text(`Ma don: #${order.id}`, 14, 34);
+    doc.text(`Ngay dat: ${new Date(order.created_at).toLocaleString('vi-VN')}`, 14, 42);
+    doc.text(`Nguoi nhan: ${order.customer_name || ''}`, 14, 50);
     doc.autoTable({
       startY: 60,
-      head: [["#", "Ten san pham", "SL", "Don gia", "Thanh tien"]],
-      body: tableBody,
-      theme: "striped",
-      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-      styles: { halign: "center", fontSize: 11 },
-      columnStyles: {
-        1: { halign: "left", cellWidth: 70 },
-      },
+      head: [['#', 'San pham', 'SL', 'Don gia', 'Thanh tien']],
+      body: order.items.map((item, index) => [index + 1, `${item.title}${item.size ? ` - Size ${item.size}` : ''}${item.color ? ` - ${item.color}` : ''}`, item.qty, formatCurrency(item.price), formatCurrency(item.price * item.qty)]),
+      headStyles: { fillColor: [16, 94, 74] },
     });
-
-    // Tổng cộng
-    const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFontSize(13);
-    doc.text(`Total: ${formatCurrency(order.total)}`, 150, finalY, {
-      align: "right",
-    });
-
-    // Footer
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(
-      "Thank you for buy in ShopLite!",
-      105,
-      285,
-      { align: "center" }
-    );
-
-    // Xuất file
-    doc.save(`don-hang-${order.id}.pdf`);
-  };
-
-  // Render nội dung
-  const renderContent = () => {
-    if (loading) {
-      return (
-        <div className="text-center my-5">
-          <Spinner animation="border" variant="primary" />
-          <p className="mt-3">Đang tải đơn hàng...</p>
-        </div>
-      );
-    }
-
-    if (error) {
-      return <Alert variant="danger">{error}</Alert>;
-    }
-
-    if (orders.length === 0) {
-      return (
-        <div className="text-center my-5">
-          <i className="bi bi-box-seam" style={{ fontSize: "3rem", color: "#6c757d" }}></i>
-          <h4 className="mt-3">Bạn chưa có đơn hàng nào</h4>
-          <p className="text-muted">
-            Tất cả đơn hàng bạn đã đặt sẽ xuất hiện ở đây.
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <Accordion defaultActiveKey="0" alwaysOpen>
-        {orders.map((order, index) => (
-          <Accordion.Item
-            eventKey={String(index)}
-            key={order.id}
-            className="mb-3 border rounded shadow-sm"
-          >
-            <Accordion.Header>
-              <Row className="w-100 align-items-center">
-                <Col md={3} xs={6}>
-                  <strong className="text-primary">Mã ĐH: #{order.id}</strong>
-                </Col>
-                <Col md={4} className="d-none d-md-block">
-                  Ngày đặt:{" "}
-                  {new Date(order.created_at).toLocaleDateString("vi-VN")}
-                </Col>
-                <Col md={3} xs={4} className="text-md-center">
-                  Tổng:{" "}
-                  <strong className="text-danger">
-                    {formatCurrency(order.total)}
-                  </strong>
-                </Col>
-                <Col md={2} xs={2} className="text-end">
-                  <Badge
-                    pill
-                    bg={getStatusBadgeVariant(order.status)}
-                    className="text-capitalize"
-                  >
-                    {order.status}
-                  </Badge>
-                </Col>
-              </Row>
-            </Accordion.Header>
-
-            <Accordion.Body>
-              <h5 className="mb-3 fw-semibold text-secondary">
-                Chi tiết sản phẩm:
-              </h5>
-              <ListGroup variant="flush">
-                {order.items.map((item, i) => (
-                  <ListGroup.Item
-                    key={i}
-                    className="d-flex justify-content-between align-items-center"
-                  >
-                    <div className="d-flex align-items-center">
-                      <Image
-                        src={item.thumbnail}
-                        alt={item.title}
-                        rounded
-                        style={{
-                          width: "60px",
-                          height: "60px",
-                          objectFit: "cover",
-                        }}
-                      />
-                      <div className="ms-3">
-                        <p className="fw-bold mb-0">{item.title || item.name}</p>
-                        <small className="text-muted">
-                          Đơn giá: {formatCurrency(item.price)}
-                        </small>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="mb-0">
-                        Số lượng: <strong>{item.qty || item.quantity}</strong>
-                      </p>
-                      <p className="mb-0 fw-bold text-end">
-                        {formatCurrency(
-                          item.price * (item.qty || item.quantity)
-                        )}
-                      </p>
-                    </div>
-                  </ListGroup.Item>
-                ))}
-              </ListGroup>
-
-              <div className="text-end mt-4">
-                <Button
-                  variant="outline-primary"
-                  onClick={() => handleDownloadPDF(order)}
-                >
-                  <i className="bi bi-file-earmark-pdf me-2"></i> Xuất hóa đơn PDF
-                </Button>
-              </div>
-            </Accordion.Body>
-          </Accordion.Item>
-        ))}
-      </Accordion>
-    );
+    doc.text(`Tong: ${formatCurrency(order.total)}`, 196, doc.lastAutoTable.finalY + 12, { align: 'right' });
+    doc.save(`shoplite-don-${order.id}.pdf`);
   };
 
   return (
-    <Container className="my-5">
-      <Card className="p-4 shadow border-0">
-        <Card.Title as="h2" className="mb-4 text-primary fw-bold">
-          <i className="bi bi-receipt-cutoff me-2"></i> Đơn Hàng Của Tôi
-        </Card.Title>
-        {renderContent()}
-      </Card>
+    <Container className="orders-page">
+      <div className="page-title"><span>Tài khoản</span><h1>Đơn hàng của tôi</h1></div>
+      {location.state?.newOrderId && <Alert variant="success"><i className="bi bi-check-circle me-2" />Đặt hàng thành công. Mã đơn của bạn là <strong>#{location.state.newOrderId}</strong>.</Alert>}
+      {loading && <div className="page-loader"><Spinner animation="border" /><span>Đang tải đơn hàng...</span></div>}
+      {error && <Alert variant="danger">{error}</Alert>}
+      {!loading && !error && !orders.length && <div className="empty-state"><i className="bi bi-receipt" /><h2>Bạn chưa có đơn hàng</h2><p>Các đơn đã đặt sẽ xuất hiện tại đây.</p><Button as={Link} to="/products">Bắt đầu mua sắm</Button></div>}
+      <Accordion defaultActiveKey={orders[0] ? String(orders[0].id) : undefined}>
+        {orders.map((order) => {
+          const status = orderStatuses[order.status] || { label: order.status, color: 'secondary' };
+          return <Accordion.Item eventKey={String(order.id)} key={order.id} className="order-item">
+            <Accordion.Header>
+              <div className="order-heading"><div><strong>Đơn #{order.id}</strong><span>{new Date(order.created_at).toLocaleString('vi-VN')}</span></div><div><Badge bg={status.color}>{status.label}</Badge><strong>{formatCurrency(Number(order.total))}</strong></div></div>
+            </Accordion.Header>
+            <Accordion.Body>
+              <Row className="g-4">
+                <Col lg={8}>
+                  <ListGroup variant="flush">
+                    {order.items.map((item, index) => <ListGroup.Item key={`${order.id}-${item.product_id}-${item.size || ''}-${item.color || ''}-${index}`} className="order-product">
+                      {item.thumbnail ? <Image src={item.thumbnail} alt={item.title} /> : <div className="summary-placeholder"><i className="bi bi-image" /></div>}
+                      <div><strong>{item.title}</strong>{(item.size || item.color) && <span>{item.size && `Size ${item.size}`}{item.size && item.color && ' · '}{item.color}</span>}<span>{formatCurrency(Number(item.price))} x {item.qty}</span></div>
+                      <b>{formatCurrency(Number(item.price) * item.qty)}</b>
+                    </ListGroup.Item>)}
+                  </ListGroup>
+                </Col>
+                <Col lg={4}>
+                  <div className="delivery-info"><h3>Thông tin nhận hàng</h3><p><strong>{order.customer_name}</strong></p><p>{order.customer_phone}</p><p>{order.customer_address}</p><p>{paymentMethodLabels[order.payment_method] || order.payment_method}</p><p>{paymentStatusLabels[order.payment_status] || order.payment_status}</p></div>
+                </Col>
+              </Row>
+              <div className="order-actions mt-3"><Button as={Link} to={`/orders/${order.id}`} size="sm">Xem chi tiết <i className="bi bi-arrow-right ms-2" /></Button><Button variant="outline-dark" size="sm" onClick={() => downloadInvoice(order)}><i className="bi bi-file-earmark-pdf me-2" />Tải hóa đơn</Button></div>
+            </Accordion.Body>
+          </Accordion.Item>;
+        })}
+      </Accordion>
     </Container>
   );
-};
-
-export default UserOrders;
+}

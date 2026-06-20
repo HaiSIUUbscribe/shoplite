@@ -1,157 +1,49 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { Container, Table, Spinner, Alert,Badge,Form,Button } from "react-bootstrap";
-import { formatCurrency } from "../../utils/formatCurrency";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Badge, Button, Container, Form, Spinner, Table } from 'react-bootstrap';
+import { toast } from 'react-toastify';
+import { orderService } from '../../services/api';
+import { formatCurrency } from '../../utils/formatCurrency';
+import { paymentMethodLabels, paymentStatusLabels } from '../../utils/payment';
+
+const statuses = {
+  pending: ['Chờ xác nhận', 'warning'], processing: ['Đang chuẩn bị', 'info'], shipping: ['Đang giao', 'primary'], done: ['Hoàn tất', 'success'], cancelled: ['Đã hủy', 'danger'],
+};
 
 export default function OrdersAdmin() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [filter, setFilter] = useState("");
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState('');
 
-  useEffect(() => {
-    fetchOrders();
-  }, [filter]);
+  const loadOrders = () => {
+    setLoading(true); setError('');
+    orderService.getAll().then((data) => setOrders(data)).catch(() => setError('Không thể tải danh sách đơn hàng.')).finally(() => setLoading(false));
+  };
+  useEffect(loadOrders, []);
+  const visibleOrders = useMemo(() => filter ? orders.filter((order) => order.status === filter) : orders, [orders, filter]);
 
-  const fetchOrders = async () => {
+  const updateStatus = async (order, status) => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem("token");
-
-      const res = await axios.get("https://shoplite-vwur.onrender.com/api/orders", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      let data = res.data;
-
-      if (filter) {
-        data = data.filter((o) => o.status === filter);
-      }
-
-      setOrders(data);
-    } catch (err) {
-      console.error("Lỗi khi tải đơn hàng:", err);
-      setError("Không thể tải danh sách đơn hàng.");
-    } finally {
-      setLoading(false);
-    }
+      await orderService.updateStatus(order.id, status);
+      toast.success(`Đã cập nhật đơn #${order.id}.`);
+      loadOrders();
+    } catch (requestError) { toast.error(requestError.response?.data?.message || 'Không thể cập nhật đơn hàng.'); }
   };
 
-  const updateStatus = async (id, status) => {
-    try {
-      const token = localStorage.getItem("token");
-      await axios.put(
-        `https://shoplite-vwur.onrender.com/api/orders/${id}/status`,
-        { status },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      fetchOrders();
-    } catch (err) {
-      console.error("Lỗi khi cập nhật trạng thái:", err);
-      alert("Cập nhật trạng thái thất bại!");
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    const map = {
-      pending: "warning",
-      processing: "info",
-      done: "success",
-      cancelled: "danger",
-    };
-    return <Badge bg={map[status]}>{status}</Badge>;
-  };
-
-  return (
-    <Container className="my-5">
-      <h2 className="fw-bold mb-4 text-primary">
-        <i className="bi bi-card-checklist me-2"></i> Quản lý đơn hàng
-      </h2>
-
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <Form.Select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          style={{ width: "200px" }}
-        >
-          <option value="">Tất cả trạng thái</option>
-          <option value="pending">Đang chờ</option>
-          <option value="processing">Đang xử lý</option>
-          <option value="done">Hoàn tất</option>
-          <option value="cancelled">Đã hủy</option>
-        </Form.Select>
-
-        <Button variant="secondary" onClick={fetchOrders}>
-          <i className="bi bi-arrow-clockwise me-1"></i> Làm mới
-        </Button>
-      </div>
-
-      {loading ? (
-        <div className="text-center my-5">
-          <Spinner animation="border" />
-          <p>Đang tải đơn hàng...</p>
-        </div>
-      ) : error ? (
-        <Alert variant="danger">{error}</Alert>
-      ) : (
-        <Table bordered hover responsive className="align-middle shadow-sm">
-          <thead className="table-primary">
-            <tr>
-              <th>#</th>
-              <th>ID</th>
-              <th>Người dùng</th>
-              <th>Sản phẩm</th>
-              <th>Tổng tiền</th>
-              <th>Trạng thái</th>
-              <th>Ngày đặt</th>
-              <th>Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((o, index) => (
-              <tr key={o.id}>
-                <td>{index + 1}</td>
-                <td>#{o.id}</td>
-                <td>{o.user_id}</td>
-                <td>
-                  {Array.isArray(o.items)
-                    ? o.items.map((item, i) => (
-                        <div key={i}>
-                          {item.title || item.name} × {item.qty || item.quantity}
-                        </div>
-                      ))
-                    : JSON.parse(o.items).map((item, i) => (
-                        <div key={i}>
-                          {item.title || item.name} × {item.qty || item.quantity}
-                        </div>
-                      ))}
-                </td>
-                <td className="text-danger fw-bold">
-                  {formatCurrency(o.total)}
-                </td>
-                <td>{getStatusBadge(o.status)}</td>
-                <td>
-                  {new Date(o.created_at).toLocaleString("vi-VN", {
-                    hour12: false,
-                  })}
-                </td>
-                <td>
-                  <Form.Select
-                    size="sm"
-                    value={o.status}
-                    onChange={(e) => updateStatus(o.id, e.target.value)}
-                  >
-                    <option value="pending">pending</option>
-                    <option value="processing">processing</option>
-                    <option value="done">done</option>
-                    <option value="cancelled">cancelled</option>
-                  </Form.Select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
-    </Container>
-  );
+  return <Container className="admin-page">
+    <div className="admin-heading"><div><span>Vận hành</span><h1>Quản lý đơn hàng</h1></div><Button variant="outline-dark" onClick={loadOrders}><i className="bi bi-arrow-clockwise me-2" />Làm mới</Button></div>
+    <div className="admin-filters"><Form.Select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(statuses).map(([value, [label]]) => <option key={value} value={value}>{label}</option>)}</Form.Select><span>{visibleOrders.length} đơn hàng</span></div>
+    {loading && <div className="page-loader"><Spinner animation="border" /><span>Đang tải đơn hàng...</span></div>}
+    {error && <Alert variant="danger">{error}</Alert>}
+    {!loading && !error && <div className="admin-table-wrap"><Table responsive hover className="align-middle mb-0">
+      <thead><tr><th>Đơn hàng</th><th>Khách hàng</th><th>Sản phẩm</th><th>Tổng tiền</th><th>Trạng thái</th></tr></thead>
+      <tbody>{visibleOrders.map((order) => { const [label, color] = statuses[order.status] || [order.status, 'secondary']; return <tr key={order.id}>
+        <td><strong>#{order.id}</strong><small className="table-subtext">{new Date(order.created_at).toLocaleString('vi-VN')}</small></td>
+        <td><strong>{order.customer_name || order.user_name}</strong><small className="table-subtext">{order.customer_phone}</small><small className="table-subtext">{order.customer_address}</small></td>
+        <td>{order.items.map((item, index) => <small className="table-subtext" key={`${order.id}-${item.product_id}-${index}`}>{item.title}{item.size ? ` · Size ${item.size}` : ''}{item.color ? ` · ${item.color}` : ''} x {item.qty}</small>)}</td>
+        <td><strong>{formatCurrency(Number(order.total))}</strong><small className="table-subtext">{paymentMethodLabels[order.payment_method] || order.payment_method}</small><small className="table-subtext">{paymentStatusLabels[order.payment_status] || order.payment_status}</small></td>
+        <td><Badge bg={color} className="mb-2">{label}</Badge><Form.Select size="sm" value={order.status} disabled={['done', 'cancelled'].includes(order.status)} onChange={(event) => updateStatus(order, event.target.value)}>{Object.entries(statuses).map(([value, [text]]) => <option key={value} value={value}>{text}</option>)}</Form.Select></td>
+      </tr>; })}</tbody>
+    </Table>{!visibleOrders.length && <div className="empty-table">Không có đơn hàng phù hợp.</div>}</div>}
+  </Container>;
 }

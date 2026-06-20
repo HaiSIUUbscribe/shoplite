@@ -21,7 +21,7 @@ const MainLayout = () => {
         theme="light"
       />
 
-      <main>
+      <main className="site-main">
         <Outlet />
       </main>
 

@@ -1,163 +1,43 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { Container, Row, Col, Card, Spinner, Alert } from "react-bootstrap";
-import "bootstrap-icons/font/bootstrap-icons.css";
-import { formatCurrency } from "../../utils/formatCurrency";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from "recharts";
+import React, { useEffect, useState } from 'react';
+import { Alert, Card, Col, Container, Row, Spinner } from 'react-bootstrap';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { adminService } from '../../services/api';
+import { formatCurrency } from '../../utils/formatCurrency';
+
+const cards = [
+  ['Sản phẩm', 'totalProducts', 'bi-box-seam', 'blue'],
+  ['Tồn kho', 'totalStock', 'bi-boxes', 'teal'],
+  ['Đơn chờ xử lý', 'pendingOrders', 'bi-hourglass-split', 'amber'],
+  ['Khách hàng', 'totalUsers', 'bi-people', 'violet'],
+];
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({
-    totalProducts: 0,
-    totalOrders: 0,
-    totalRevenue: 0,
-  });
-  const [chartData, setChartData] = useState([]); // Dữ liệu biểu đồ
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchDashboardStats();
+    adminService.getDashboard()
+      .then((data) => setStats(data))
+      .catch(() => setError('Không thể tải dữ liệu tổng quan.'))
+      .finally(() => setLoading(false));
   }, []);
 
-  const fetchDashboardStats = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem("token");
+  if (loading) return <div className="page-loader"><Spinner animation="border" /><span>Đang tải tổng quan...</span></div>;
 
-      const res = await axios.get("https://shoplite-vwur.onrender.com/api/admin/dashboard", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      setStats(res.data.stats || res.data);
-
-      // Giả lập dữ liệu biểu đồ (backend có thể trả dữ liệu thực)
-      setChartData(res.data.monthlyStats || [
-        { month: "1", revenue: 12000000, orders: 15 },
-        { month: "2", revenue: 18000000, orders: 22 },
-        { month: "3", revenue: 14500000, orders: 17 },
-        { month: "4", revenue: 23000000, orders: 28 },
-        { month: "5", revenue: 19000000, orders: 21 },
-        { month: "6", revenue: 25000000, orders: 30 },
-      ]);
-    } catch (err) {
-      console.error("Lỗi khi tải thống kê:", err);
-      setError("Không thể tải dữ liệu Dashboard.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const StatCard = ({ title, value, icon, color }) => (
-    <Card className="shadow-sm border-0 h-100">
-      <Card.Body className="d-flex align-items-center">
-        <div
-          className={`rounded-circle d-flex justify-content-center align-items-center me-3`}
-          style={{
-            width: "60px",
-            height: "60px",
-            backgroundColor: `${color}20`,
-            color,
-            fontSize: "1.8rem",
-          }}
-        >
-          <i className={`bi ${icon}`}></i>
-        </div>
-        <div>
-          <h6 className="text-muted mb-1">{title}</h6>
-          <h4 className="fw-bold mb-0">
-            {title === "Doanh thu" ? formatCurrency(value) : value}
-          </h4>
-        </div>
-      </Card.Body>
-    </Card>
-  );
-
-  return (
-    <Container className="my-5">
-      <h2 className="fw-bold mb-4 text-primary">
-        <i className="bi bi-speedometer2 me-2"></i> Trang quản trị
-      </h2>
-
-      {loading ? (
-        <div className="text-center my-5">
-          <Spinner animation="border" />
-          <p className="mt-3">Đang tải dữ liệu...</p>
-        </div>
-      ) : error ? (
-        <Alert variant="danger">{error}</Alert>
-      ) : (
-        <>
-          {/* Thống kê nhanh */}
-          <Row className="g-4 mb-5">
-            <Col md={4} sm={6}>
-              <StatCard
-                title="Sản phẩm"
-                value={stats.totalProducts}
-                icon="bi-box-seam"
-                color="#0d6efd"
-              />
-            </Col>
-            <Col md={4} sm={6}>
-              <StatCard
-                title="Đơn hàng"
-                value={stats.totalOrders}
-                icon="bi-cart-check"
-                color="#198754"
-              />
-            </Col>
-            <Col md={4} sm={6}>
-              <StatCard
-                title="Doanh thu"
-                value={stats.totalRevenue}
-                icon="bi-cash-coin"
-                color="#dc3545"
-              />
-            </Col>
-          </Row>
-
-          {/* Biểu đồ doanh thu và đơn hàng */}
-          <Card className="shadow-sm border-0 mb-4">
-            <Card.Body>
-              <h5 className="fw-semibold mb-4">
-                <i className="bi bi-bar-chart-line text-primary me-2"></i>
-                Biểu đồ doanh thu theo tháng
-              </h5>
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis tickFormatter={(v) => `${v / 1000000}tr`} />
-                  <Tooltip formatter={(v) => formatCurrency(v)} />
-                  <Legend />
-                  <Bar dataKey="revenue" fill="#0d6efd" name="Doanh thu" />
-                  <Bar dataKey="orders" fill="#198754" name="Đơn hàng" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card.Body>
-          </Card>
-
-          {/* Biểu đồ đường: xu hướng đơn hàng */}
-          <Card className="shadow-sm border-0">
-            <Card.Body>
-              <h5 className="fw-semibold mb-4">
-                <i className="bi bi-graph-up-arrow text-success me-2"></i>
-                Xu hướng đơn hàng theo thời gian
-              </h5>
-              <ResponsiveContainer width="100%" height={350}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="orders" stroke="#198754" strokeWidth={3} name="Số đơn hàng" />
-                  <Line type="monotone" dataKey="revenue" stroke="#0d6efd" strokeWidth={3} name="Doanh thu" />
-                </LineChart>
-              </ResponsiveContainer>
-            </Card.Body>
-          </Card>
-        </>
-      )}
-    </Container>
-  );
+  return <Container className="admin-page">
+    <div className="admin-heading"><div><span>Tổng quan cửa hàng</span><h1>Dashboard</h1></div></div>
+    {error && <Alert variant="danger">{error}</Alert>}
+    {stats && <>
+      <Row className="g-3 mb-4">
+        {cards.map(([label, key, icon, tone]) => <Col xl={3} sm={6} key={key}><div className={`stat-card ${tone}`}><i className={`bi ${icon}`} /><div><span>{label}</span><strong>{Number(stats[key] || 0).toLocaleString('vi-VN')}</strong></div></div></Col>)}
+      </Row>
+      <div className="revenue-band"><div><span>Doanh thu ghi nhận</span><strong>{formatCurrency(Number(stats.totalRevenue || 0))}</strong><small>Không bao gồm đơn đã hủy</small></div><div><span>Tổng đơn hàng</span><strong>{Number(stats.totalOrders || 0).toLocaleString('vi-VN')}</strong><small>Tất cả trạng thái</small></div></div>
+      <Card className="chart-panel border-0">
+        <Card.Body><div className="chart-heading"><h2>Doanh thu 12 tháng gần nhất</h2><span>VND</span></div>
+          {stats.monthlyStats?.length ? <ResponsiveContainer width="100%" height={340}><BarChart data={stats.monthlyStats} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}><CartesianGrid vertical={false} stroke="#e8ece9" /><XAxis dataKey="month" tickLine={false} axisLine={false} /><YAxis tickFormatter={(value) => `${Math.round(value / 1000000)}tr`} tickLine={false} axisLine={false} /><Tooltip formatter={(value, name) => name === 'revenue' ? formatCurrency(value) : value} /><Bar dataKey="revenue" name="Doanh thu" fill="#105e4a" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer> : <div className="empty-chart">Chưa có dữ liệu doanh thu.</div>}
+        </Card.Body>
+      </Card>
+    </>}
+  </Container>;
 }

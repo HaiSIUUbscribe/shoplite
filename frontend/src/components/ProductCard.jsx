@@ -1,60 +1,38 @@
-import React, { useContext } from "react";
-import { Card, Button } from "react-bootstrap";
-import { Link } from "react-router-dom";
+import React, { useContext, useState } from 'react';
+import { Badge, Button, Card } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import PropTypes from 'prop-types';
-
-import { CartContext } from "../context/CartContext";
-import { formatCurrency } from "../utils/formatCurrency";
-import "../index.css";
+import { CartContext } from '../context/CartContext';
+import { formatCurrency } from '../utils/formatCurrency';
 
 export default function ProductCard({ product }) {
   const { addToCart } = useContext(CartContext);
-
-  const handleAdd = () => {
-    addToCart(product, 1);
-  };
+  const [imageFailed, setImageFailed] = useState(false);
+  const outOfStock = Number(product.stock) <= 0;
+  const hasVariants = Boolean(product.sizes?.length || product.colors?.length);
 
   return (
-    <Card className="h-100 shadow-sm border-0 product-card">
-      <Link to={`/products/${product.id}`} style={{ textDecoration: 'none' }}>
-        <div className="overflow-hidden">
-          <Card.Img
-            variant="top"
-            src={product.thumbnail}
-            alt={product.title}
-            className="product-img"
-            style={{ height: "220px", objectFit: "cover" }}
-          />
-        </div>
+    <Card className="product-card h-100 border-0">
+      <Link to={`/products/${product.id}`} className="product-media" aria-label={`Xem ${product.title}`}>
+        {!imageFailed && product.thumbnail ? (
+          <Card.Img src={product.thumbnail} alt={product.title} onError={() => setImageFailed(true)} />
+        ) : (
+          <i className="bi bi-image" aria-hidden="true" />
+        )}
+        {outOfStock && <Badge bg="dark" className="stock-badge">Hết hàng</Badge>}
       </Link>
-
-      <Card.Body className="d-flex flex-column text-center">
-        <Link to={`/products/${product.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-          <Card.Title className="fw-semibold text-truncate">
-            {product.title}
-          </Card.Title>
-        </Link>
-
-        {/* Mô tả ngắn */}
-        <Card.Text className="text-muted small mb-2">
-          {product.description.length > 60
-            ? product.description.slice(0, 60) + "..."
-            : product.description}
+      <Card.Body className="d-flex flex-column p-3">
+        {product.category && <span className="product-category">{product.category}</span>}
+        <Card.Title as={Link} to={`/products/${product.id}`} className="product-title">
+          {product.title}
+        </Card.Title>
+        <Card.Text className="product-description">
+          {product.description || 'Sản phẩm chất lượng được tuyển chọn tại ShopLite.'}
         </Card.Text>
-
-        {/* Giá */}
-        <Card.Text className="text-danger fw-bold mb-3">
-        {formatCurrency(product.price * 1000)}
-        </Card.Text>
-
-        {/* Nút thêm vào giỏ */}
-        <Button
-          variant="outline-primary"
-          onClick={handleAdd}
-          className="mt-auto px-3"
-        >
-          + Thêm vào giỏ hàng
-        </Button>
+        <div className="d-flex justify-content-between align-items-center gap-2 mt-auto pt-2">
+          <strong className="product-price">{formatCurrency(Number(product.price))}</strong>
+          {hasVariants ? <Button as={Link} to={`/products/${product.id}`} variant="primary" className="icon-button" disabled={outOfStock} title={outOfStock ? 'Sản phẩm đã hết hàng' : 'Chọn size và màu'} aria-label={`Chọn phiên bản ${product.title}`}><i className="bi bi-sliders" /></Button> : <Button variant="primary" className="icon-button" onClick={() => addToCart(product)} disabled={outOfStock} title={outOfStock ? 'Sản phẩm đã hết hàng' : 'Thêm vào giỏ hàng'} aria-label={outOfStock ? 'Sản phẩm đã hết hàng' : `Thêm ${product.title} vào giỏ hàng`}><i className="bi bi-cart-plus" /></Button>}
+        </div>
       </Card.Body>
     </Card>
   );
@@ -63,9 +41,13 @@ export default function ProductCard({ product }) {
 ProductCard.propTypes = {
   product: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    thumbnail: PropTypes.string.isRequired,
+    thumbnail: PropTypes.string,
     title: PropTypes.string.isRequired,
-    description: PropTypes.string.isRequired,
-    price: PropTypes.number.isRequired,
+    description: PropTypes.string,
+    category: PropTypes.string,
+    price: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    stock: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    sizes: PropTypes.arrayOf(PropTypes.string),
+    colors: PropTypes.arrayOf(PropTypes.string),
   }).isRequired,
 };

@@ -38,7 +38,7 @@ export default function Cart() {
         <Col lg={8}>
           <ListGroup variant="flush">
             {cartItems.map(item => (
-              <ListGroup.Item key={item.product_id} className="px-0 py-3">
+              <ListGroup.Item key={item.item_key} className="px-0 py-3">
                 <Row className="align-items-center">
                   {/* Hình ảnh và Tên sản phẩm */}
                   <Col md={5} className="d-flex align-items-center mb-2 mb-md-0">
@@ -50,6 +50,7 @@ export default function Cart() {
                     />
                     <div className="ms-3">
                       <h6 className="mb-0">{item.title}</h6>
+                      {(item.size || item.color) && <small className="cart-variant">{item.size && `Size: ${item.size}`}{item.size && item.color && ' · '}{item.color && `Màu: ${item.color}`}</small>}
                       <small className="text-muted">{formatCurrency(item.price)}</small>
                     </div>
                   </Col>
@@ -59,7 +60,7 @@ export default function Cart() {
                      <Button 
                         variant="outline-secondary" 
                         size="sm" 
-                        onClick={() => updateQty(item.product_id, item.qty - 1)}
+                        onClick={() => updateQty(item.item_key, item.qty - 1)}
                         disabled={item.qty <= 1}
                       >
                        -
@@ -68,7 +69,7 @@ export default function Cart() {
                      <Button 
                         variant="outline-secondary" 
                         size="sm" 
-                        onClick={() => updateQty(item.product_id, item.qty + 1)}
+                        onClick={() => updateQty(item.item_key, item.qty + 1)}
                       >
                        +
                      </Button>
@@ -77,7 +78,7 @@ export default function Cart() {
                   {/* Tổng tiền và nút Xóa */}
                   <Col md={4} xs={6} className="text-end">
                     <span className="fw-bold me-3">{formatCurrency(item.price * item.qty)}</span>
-                    <Button variant="outline-danger" size="sm" onClick={() => removeItem(item.product_id)}>
+                    <Button variant="outline-danger" size="sm" onClick={() => removeItem(item.item_key)}>
                       <i className="bi bi-trash"></i>
                     </Button>
                   </Col>

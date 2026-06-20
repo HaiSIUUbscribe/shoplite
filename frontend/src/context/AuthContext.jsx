@@ -1,48 +1,56 @@
-import React, { createContext, useState, useEffect } from 'react';
-import axiosClient from '../api/axiosClient';
+import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { authService, userService } from '../services/api';
 
-export const AuthContext = createContext();
+export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [token, setToken] = useState(() => localStorage.getItem('token') || '');
+  const [authReady, setAuthReady] = useState(false);
 
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem('token', token);
-      axiosClient.get('/auth/me')
-        .then(res => {
-          setUser(res.data.user);
-        })
-        .catch(err => {
-          console.error('Fetch profile failed', err);
-        });
-    } else {
-      localStorage.removeItem('token');
-    }
-  }, [token]);
-
-  const login = async (email, password) => {
-    const res = await axiosClient.post('/auth/login', { email, password });
-    const { token: newToken, user: userData } = res.data;
-    setToken(newToken);
-    setUser(userData);
-    return res;
-  };
-
-  const logout = () => {
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
     setToken('');
     setUser(null);
+    setAuthReady(true);
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => logout();
+    window.addEventListener('shoplite:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('shoplite:unauthorized', handleUnauthorized);
+  }, [logout]);
+
+  useEffect(() => {
+    if (!token) {
+      setAuthReady(true);
+      return;
+    }
+
+    localStorage.setItem('token', token);
+    userService.getProfile()
+      .then((data) => setUser(data.user))
+      .catch(() => logout())
+      .finally(() => setAuthReady(true));
+  }, [token, logout]);
+
+  const login = async (email, password) => {
+    const data = await authService.login(email, password);
+    localStorage.setItem('token', data.token);
+    setToken(data.token);
+    setUser(data.user);
+    setAuthReady(true);
+    return data.user;
   };
 
-  const register = async (name, email, password) => {
-    const res = await axiosClient.post('/auth/register', { name, email, password });
-    return res;
-  };
+  const register = (name, email, password) => authService.register(name, email, password);
 
-  return (
-    <AuthContext.Provider value={{ user, token, login, logout, register }}>
-      {children}
-    </AuthContext.Provider>
+  const updateUser = (nextUser) => setUser(nextUser);
+
+  const value = useMemo(
+    () => ({ user, token, authReady, login, logout, register, updateUser }),
+    [user, token, authReady, logout]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

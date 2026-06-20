@@ -1,23 +1,23 @@
 const jwt = require('jsonwebtoken');
+const ApiError = require('../utils/ApiError');
 
 exports.authenticate = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ message: 'No token' });
+  const [scheme, token] = (req.headers.authorization || '').split(' ');
+  if (scheme !== 'Bearer' || !token) {
+    return next(new ApiError(401, 'Vui lòng đăng nhập để tiếp tục.', 'AUTH_REQUIRED'));
+  }
 
-  const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    res.status(401).json({ message: 'Invalid token' });
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    return next();
+  } catch (error) {
+    return next(new ApiError(401, 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ.', 'INVALID_TOKEN'));
   }
 };
 
 exports.isAdmin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
-    next();
-  } else {
-    res.status(403).json({ message: 'Access denied. Admins only.' });
+  if (req.user?.role !== 'admin') {
+    return next(new ApiError(403, 'Bạn không có quyền thực hiện thao tác này.', 'ADMIN_REQUIRED'));
   }
+  return next();
 };

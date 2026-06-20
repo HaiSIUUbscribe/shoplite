@@ -1,101 +1,127 @@
-import React, { createContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 
-export const CartContext = createContext();
+export const CartContext = createContext(null);
+
+function itemKey(productId, size = '', color = '') {
+  return `${productId}:${size || ''}:${color || ''}`;
+}
+
+function createCheckoutItem(product, qty, options = {}) {
+  const size = options.size || null;
+  const color = options.color || null;
+  return {
+    item_key: itemKey(product.id, size, color),
+    product_id: product.id,
+    title: product.title,
+    price: Number(product.price),
+    qty: Math.max(1, Number(qty) || 1),
+    size,
+    color,
+    thumbnail: product.thumbnail,
+    stock: Number(product.stock),
+  };
+}
+
+function readStoredItems(key, fallback) {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(key) || JSON.stringify(fallback));
+    return Array.isArray(stored)
+      ? stored.map((item) => ({ ...item, item_key: item.item_key || itemKey(item.product_id, item.size, item.color) }))
+      : fallback;
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function readBuyNowItem() {
+  try {
+    const item = JSON.parse(window.sessionStorage.getItem('shoplite_buy_now_v1') || 'null');
+    return item && item.product_id ? item : null;
+  } catch (error) {
+    return null;
+  }
+}
 
 export function CartProvider({ children }) {
-  const [cartItems, setCartItems] = useState(() => {
-    // Khởi tạo trạng thái từ localStorage
-    try {
-      const stored = localStorage.getItem('cart');
-      return stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error("Không thể đọc giỏ hàng từ localStorage", error);
-      return [];
-    }
-  });
+  const [cartItems, setCartItems] = useState(() => readStoredItems('shoplite_cart_v3', []));
+  const [buyNowItem, setBuyNowItem] = useState(readBuyNowItem);
 
-  // Lưu trạng thái vào localStorage
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cartItems));
+    window.localStorage.setItem('shoplite_cart_v3', JSON.stringify(cartItems));
   }, [cartItems]);
 
-  const addToCart = (product, qty = 1) => {
-    setCartItems(prev => {
-      const exist = prev.find(item => item.product_id === product.id);
+  useEffect(() => {
+    if (buyNowItem) window.sessionStorage.setItem('shoplite_buy_now_v1', JSON.stringify(buyNowItem));
+    else window.sessionStorage.removeItem('shoplite_buy_now_v1');
+  }, [buyNowItem]);
 
-      if (exist) {
-        //Kiểm tra tồn kho trước khi tăng số lượng**
-        const newQty = exist.qty + qty;
-        if (product.stock && newQty > product.stock) {
-          toast.warn(`Chỉ còn ${product.stock} sản phẩm trong kho!`);
-          return prev; // Trả về trạng thái cũ không thay đổi
-        }
-        
-        // Cập nhật số lượng nếu sản phẩm đã tồn tại
-        return prev.map(item =>
-          item.product_id === product.id
-            ? { ...item, qty: newQty }
-            : item
-        );
-      } else {
-        // Thêm sản phẩm mới vào giỏ hàng
-        return [...prev, { 
-            product_id: product.id, 
-            title: product.title, 
-            price: product.price, 
-            qty, 
-            thumbnail: product.thumbnail,
-            stock: product.stock // Lưu lại thông tin tồn kho
-        }];
+  const addToCart = (product, qty = 1, options = {}) => {
+    const stock = Number(product.stock);
+    const nextItem = createCheckoutItem(product, qty, options);
+    if (stock <= 0) {
+      toast.warning('Sản phẩm hiện đã hết hàng.');
+      return false;
+    }
+
+    let added = false;
+    setCartItems((current) => {
+      const existing = current.find((item) => item.item_key === nextItem.item_key);
+      const nextQty = (existing?.qty || 0) + nextItem.qty;
+      if (nextQty > stock) {
+        toast.warning(`Sản phẩm chỉ còn ${stock} trong kho.`);
+        return current;
       }
+      added = true;
+      if (existing) {
+        return current.map((item) => item.item_key === nextItem.item_key ? { ...item, qty: nextQty, stock } : item);
+      }
+      return [...current, nextItem];
     });
-
-    toast.success(`Đã thêm "${product.title}" vào giỏ hàng!`);
+    if (added) toast.success(`Đã thêm "${product.title}" vào giỏ hàng.`);
+    return added;
   };
 
-  const updateQty = (product_id, newQty) => {
-    setCartItems(prev => prev.map(item => {
-      if (item.product_id === product_id) {
-        if (item.stock && newQty > item.stock) {
-            toast.warn(`Chỉ còn ${item.stock} sản phẩm trong kho!`);
-            return item;
-        }
-        return { ...item, qty: newQty };
+  const startBuyNow = (product, qty = 1, options = {}) => {
+    if (Number(product.stock) <= 0) {
+      toast.warning('Sản phẩm hiện đã hết hàng.');
+      return false;
+    }
+    setBuyNowItem(createCheckoutItem(product, qty, options));
+    return true;
+  };
+
+  const updateQty = (key, qty) => {
+    const nextQty = Number(qty);
+    if (nextQty < 1) return;
+    setCartItems((current) => current.map((item) => {
+      if (item.item_key !== key) return item;
+      if (nextQty > Number(item.stock)) {
+        toast.warning(`Sản phẩm chỉ còn ${item.stock} trong kho.`);
+        return item;
       }
-      return item;
+      return { ...item, qty: nextQty };
     }));
   };
 
-  const removeItem = (product_id) => {
-    const itemToRemove = cartItems.find(i => i.product_id === product_id);
-    setCartItems(prev => prev.filter(i => i.product_id !== product_id));
+  const removeItem = (key) => setCartItems((current) => current.filter((item) => item.item_key !== key));
+  const clearCart = () => setCartItems([]);
+  const clearBuyNow = () => setBuyNowItem(null);
+  const subtotal = cartItems.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
+  const totalQuantity = cartItems.reduce((sum, item) => sum + Number(item.qty), 0);
 
-    // **CẢI TIẾN: Thêm thông báo cho người dùng khi xóa**
-    if (itemToRemove) {
-        toast.error(`Đã xóa "${itemToRemove.title}" khỏi giỏ hàng.`);
-    }
-  };
-
-  const clearCart = () => {
-    setCartItems([]);
-    toast.info("Giỏ hàng đã được dọn sạch!");
-  };
-
-  const subtotal = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0);
-
-  const contextValue = useMemo(() => ({
+  const value = useMemo(() => ({
     cartItems,
+    buyNowItem,
     addToCart,
+    startBuyNow,
     updateQty,
     removeItem,
     clearCart,
-    subtotal
-  }), [cartItems]);
+    clearBuyNow,
+    subtotal,
+    totalQuantity,
+  }), [cartItems, buyNowItem, subtotal, totalQuantity]);
 
-  return (
-    <CartContext.Provider value={contextValue}>
-      {children}
-    </CartContext.Provider>
-  );
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

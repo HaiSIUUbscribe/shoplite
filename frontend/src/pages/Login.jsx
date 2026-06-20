@@ -1,12 +1,13 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Form, Button, Container, Alert, Card, InputGroup, Spinner } from 'react-bootstrap';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 
 export default function Login() {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,7 +25,7 @@ export default function Login() {
       await login(email, password);
       setSuccess('Đăng nhập thành công! Đang chuyển hướng...');
       setTimeout(() => {
-        navigate('/');
+        navigate(location.state?.from || '/', { replace: true });
       }, 1500);
     } catch (err) {
       console.error(err);
@@ -36,11 +37,10 @@ export default function Login() {
 
   return (
     <div
-      className="bg-light d-flex align-items-center justify-content-center"
-      style={{ minHeight: '100vh' }}
+      className="auth-page d-flex align-items-center justify-content-center"
     >
       <Container style={{ maxWidth: '450px' }}>
-        <Card className="shadow-lg border-0 rounded-4">
+        <Card className="auth-card border-0">
           <Card.Body className="p-4 p-sm-5">
             <h2 className="text-center fw-bold mb-4">Đăng Nhập</h2>
 
@@ -77,12 +77,9 @@ export default function Login() {
                     disabled={loading}
                   />
                 </InputGroup>
-                <div className="text-end mt-2">
-                  <Link to="/forgot-password" style={{ fontSize: '0.9rem' }}>
-                    Quên mật khẩu?
-                  </Link>
-                </div>
               </Form.Group>
+
+              <div className="text-end mb-4"><Link to="/forgot-password" className="small">Quên mật khẩu?</Link></div>
 
               <div className="d-grid">
                 <Button variant="primary" type="submit" disabled={loading} size="lg">

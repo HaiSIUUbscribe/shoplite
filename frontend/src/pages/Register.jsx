@@ -30,7 +30,7 @@ export default function Register() {
 
     try {
       await register(name, email, password);
-      setSuccess('🎉 Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
+      setSuccess('Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
       console.error(err);
@@ -41,9 +41,9 @@ export default function Register() {
   };
 
   return (
-    <div className="bg-light d-flex align-items-center justify-content-center" style={{ minHeight: '100vh' }}>
+    <div className="auth-page d-flex align-items-center justify-content-center">
       <Container style={{ maxWidth: '450px' }}>
-        <Card className="shadow-lg border-0 rounded-4">
+        <Card className="auth-card border-0">
           <Card.Body className="p-4 p-sm-5">
             <h2 className="text-center fw-bold mb-4">Tạo Tài Khoản</h2>
 

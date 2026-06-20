@@ -1,117 +1,109 @@
-const db = require('../db');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const UserModel = require('../models/UserModel');
+const ApiError = require('../utils/ApiError');
+const mailer = require('../utils/mailer');
 
-/*Đăng ký tài khoản mới*/
-exports.register = async (req, res) => {
+function publicUser(user) {
+  return { id: user.id, name: user.name, email: user.email, role: user.role, created_at: user.created_at };
+}
+
+exports.register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const name = req.body.name.trim();
+    const email = req.body.email.toLowerCase();
+    if (await UserModel.emailExists(email)) {
+      throw new ApiError(409, 'Email đã được đăng ký.', 'EMAIL_EXISTS');
+    }
 
-    if (!name || !email || !password)
-      return res.status(400).json({ message: 'Thiếu thông tin bắt buộc.' });
-
-    // Kiểm tra trùng email
-    const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
-    if (existing.length > 0)
-      return res.status(400).json({ message: 'Email đã được đăng ký.' });
-
-    // Mã hóa mật khẩu
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Thêm vào DB
-    await db.query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', [
-      name,
-      email,
-      hashedPassword,
-      'client',
-    ]);
-
-    res.json({ message: 'Đăng ký thành công!' });
-  } catch (err) {
-    console.error('Register error:', err);
-    res.status(500).json({ message: 'Lỗi server', error: err.message });
+    const passwordHash = await bcrypt.hash(req.body.password, 12);
+    const userId = await UserModel.create({ name, email, passwordHash });
+    return res.status(201).json({ message: 'Đăng ký thành công.', userId });
+  } catch (error) {
+    return next(error);
   }
 };
 
-/*Đăng nhập*/
-exports.login = async (req, res) => {
+exports.login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const user = await UserModel.findByEmail(req.body.email.toLowerCase());
+    if (!user) throw new ApiError(401, 'Email hoặc mật khẩu không chính xác.', 'INVALID_CREDENTIALS');
 
-    const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-    if (users.length === 0)
-      return res.status(400).json({ message: 'Tài khoản không tồn tại.' });
+    const isBcrypt = /^\$2[aby]\$/.test(user.password);
+    const isMatch = isBcrypt
+      ? await bcrypt.compare(req.body.password, user.password)
+      : req.body.password === user.password;
+    if (!isMatch) throw new ApiError(401, 'Email hoặc mật khẩu không chính xác.', 'INVALID_CREDENTIALS');
 
-    const user = users[0];
-    let isMatch = false;
-
-    // Nếu password được mã hóa bằng bcrypt
-    if (user.password.startsWith('$2b$')) {
-      isMatch = await bcrypt.compare(password, user.password);
-    } else {
-      isMatch = password === user.password;
+    if (!isBcrypt) {
+      await UserModel.updatePassword(user.id, await bcrypt.hash(req.body.password, 12));
     }
 
-    if (!isMatch)
-      return res.status(400).json({ message: 'Sai mật khẩu.' });
-
-    // Tạo token JWT
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-
-    res.json({
-      message: 'Đăng nhập thành công!',
-      token,
-      user: { id: user.id, name: user.name, role: user.role },
-    });
-  } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ message: 'Lỗi server', error: err.message });
+    return res.json({ message: 'Đăng nhập thành công.', token, user: publicUser(user) });
+  } catch (error) {
+    return next(error);
   }
 };
 
-exports.getProfile = async (req, res) => {
+function passwordFingerprint(passwordHash) {
+  return crypto.createHash('sha256').update(passwordHash).digest('hex').slice(0, 24);
+}
+
+exports.forgotPassword = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const [users] = await db.query(
-      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
-      [userId]
-    );
-
-    if (users.length === 0)
-      return res.status(404).json({ message: 'Không tìm thấy người dùng.' });
-
-    res.json({ user: users[0] });
-  } catch (err) {
-    console.error('Get profile error:', err);
-    res.status(500).json({ message: 'Lỗi server', error: err.message });
-  }
-};
-
-exports.updateProfile = async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-    const userId = req.user.id;
-
-    let query = "UPDATE users SET name=?, email=?";
-    const params = [name, email];
-
-    if (password) {
-      const bcrypt = require("bcryptjs");
-      const hashed = await bcrypt.hash(password, 10);
-      query += ", password=?";
-      params.push(hashed);
+    const user = await UserModel.findByEmail(req.body.email.toLowerCase());
+    let resetUrl;
+    let emailSent = false;
+    if (user) {
+      const token = jwt.sign(
+        { id: user.id, purpose: 'password-reset', fingerprint: passwordFingerprint(user.password) },
+        process.env.JWT_RESET_SECRET || process.env.JWT_SECRET,
+        { expiresIn: '30m' }
+      );
+      const frontendUrl = String(process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000')
+        .split(',')[0]
+        .trim()
+        .replace(/\/$/, '');
+      resetUrl = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
+      try {
+        emailSent = await mailer.sendPasswordReset({ to: user.email, name: user.name, resetUrl });
+      } catch (mailError) {
+        console.error('Password reset email failed:', mailError.message);
+      }
     }
 
-    query += " WHERE id=?";
-    params.push(userId);
+    const response = { message: 'Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi.' };
+    if (process.env.NODE_ENV !== 'production' && resetUrl && !emailSent) response.resetUrl = resetUrl;
+    return res.json(response);
+  } catch (error) {
+    return next(error);
+  }
+};
 
-    await db.query(query, params);
-    res.json({ message: "Cập nhật thông tin thành công!" });
-  } catch (err) {
-    res.status(500).json({ message: "Lỗi khi cập nhật tài khoản." });
+exports.resetPassword = async (req, res, next) => {
+  try {
+    let payload;
+    try {
+      payload = jwt.verify(req.body.token, process.env.JWT_RESET_SECRET || process.env.JWT_SECRET);
+    } catch (error) {
+      throw new ApiError(400, 'Liên kết đặt lại mật khẩu đã hết hạn hoặc không hợp lệ.', 'INVALID_RESET_TOKEN');
+    }
+    if (payload.purpose !== 'password-reset') {
+      throw new ApiError(400, 'Liên kết đặt lại mật khẩu không hợp lệ.', 'INVALID_RESET_TOKEN');
+    }
+    const user = await UserModel.findPrivateById(payload.id);
+    if (!user || payload.fingerprint !== passwordFingerprint(user.password)) {
+      throw new ApiError(400, 'Liên kết đã được sử dụng hoặc không còn hiệu lực.', 'RESET_TOKEN_USED');
+    }
+    await UserModel.updatePassword(user.id, await bcrypt.hash(req.body.password, 12));
+    return res.json({ message: 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập bằng mật khẩu mới.' });
+  } catch (error) {
+    return next(error);
   }
 };

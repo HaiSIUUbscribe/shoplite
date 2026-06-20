@@ -1,215 +1,170 @@
-import React, { useEffect, useState, useMemo } from "react";
-import {Container,Row,Col,Card,Form,InputGroup,Spinner,Breadcrumb,Pagination,ListGroup } from "react-bootstrap";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Col, Container, Form, InputGroup, Pagination, Row, Spinner } from 'react-bootstrap';
+import { useSearchParams } from 'react-router-dom';
+import ProductCard from '../components/ProductCard';
+import { productService } from '../services/api';
 
-import ProductCard from "../components/ProductCard";
+const PAGE_SIZE = 12;
+const initialFilters = { search: '', category: '', minPrice: '', maxPrice: '', sort: 'newest' };
 
 export default function Products() {
-  // State quản lý dữ liệu
-  const [products, setProducts] = useState([]); 
-  const [categories, setCategories] = useState([]); 
-  //State quản lý UI và bộ lọc
+  const [searchParams] = useSearchParams();
+  const querySearch = searchParams.get('search') || '';
+  const queryCategory = searchParams.get('category') || '';
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [filters, setFilters] = useState(() => ({
+    ...initialFilters,
+    search: querySearch,
+    category: queryCategory,
+  }));
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState(""); 
+  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 12;
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [productsRes, categoriesRes] = await Promise.all([
-          fetch('https://dummyjson.com/products?limit=100'),
-          fetch('https://dummyjson.com/products/categories')
-        ]);
-        
-        const productsData = await productsRes.json();
-        const categoriesData = await categoriesRes.json();
-
-        setProducts(productsData.products);
-        setCategories(categoriesData);
-
-      } catch (err) {
-        console.error("Lỗi khi tải dữ liệu:", err);
-        setError("Không thể tải dữ liệu. Vui lòng thử lại sau.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
-
-  const filteredProducts = useMemo(() => {
-    let result = [...products];
-    if (selectedCategory) {
-      result = result.filter(p => p.category === selectedCategory);
-    }
-
-    if (search) {
-      result = result.filter((p) =>
-        p.title.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    if (sort === "low-high") {
-      result.sort((a, b) => a.price - b.price);
-    } else if (sort === "high-low") {
-      result.sort((a, b) => b.price - a.price);
-    }
-    
-    return result;
-  }, [selectedCategory, search, sort, products]);
-
-  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
-  const currentItems = filteredProducts.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-  const renderProductList = () => {
-    if (loading) {
-      return (
-        <Row className="g-4">
-          {[...Array(8)].map((_, i) => (
-            <Col md={4} sm={6} key={i}>
-              <Card className="shadow-sm border-0">
-                <div className="bg-light ratio ratio-1x1" />
-                <Card.Body>
-                  <div className="placeholder-glow"><span className="placeholder col-8"></span></div>
-                  <div className="placeholder-glow mt-2"><span className="placeholder col-5"></span></div>
-                </Card.Body>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      );
-    }
-
-    if (error) {
-      return <div className="alert alert-danger">{error}</div>;
-    }
-
-    if (currentItems.length === 0) {
-      return (
-        <div className="text-center text-muted py-5">
-          <i className="bi bi-search" style={{fontSize: '3rem'}}></i>
-          <h4 className="mt-3">Không tìm thấy sản phẩm nào</h4>
-          <p>Vui lòng thử lại với bộ lọc khác.</p>
-        </div>
-      );
-    }
-
-    return (
-      <Row className="g-4">
-        {currentItems.map((prod) => (
-          <Col key={prod.id} lg={4} md={6} sm={6}>
-            <ProductCard product={prod} />
-          </Col>
-        ))}
-      </Row>
-    );
+  const loadProducts = () => {
+    setLoading(true);
+    setError('');
+    Promise.all([productService.list(), productService.categories()])
+      .then(([productData, categoryData]) => {
+        setProducts(productData);
+        setCategories(categoryData);
+      })
+      .catch(() => setError('Không thể tải danh sách sản phẩm.'))
+      .finally(() => setLoading(false));
   };
 
+  useEffect(loadProducts, []);
+  useEffect(() => {
+    setFilters((current) => (
+      current.search === querySearch && current.category === queryCategory
+        ? current
+        : { ...current, search: querySearch, category: queryCategory }
+    ));
+  }, [querySearch, queryCategory]);
+  useEffect(() => setPage(1), [filters]);
+
+  const filtered = useMemo(() => {
+    const keyword = filters.search.trim().toLocaleLowerCase('vi');
+    const minPrice = filters.minPrice === '' ? null : Number(filters.minPrice);
+    const maxPrice = filters.maxPrice === '' ? null : Number(filters.maxPrice);
+    const result = products.filter((product) => {
+      const price = Number(product.price);
+      const matchesCategory = !filters.category || product.category === filters.category;
+      const matchesSearch = !keyword || `${product.title} ${product.description || ''}`.toLocaleLowerCase('vi').includes(keyword);
+      const matchesMinPrice = minPrice === null || price >= minPrice;
+      const matchesMaxPrice = maxPrice === null || price <= maxPrice;
+      return matchesCategory && matchesSearch && matchesMinPrice && matchesMaxPrice;
+    });
+
+    return result.sort((a, b) => {
+      if (filters.sort === 'price-asc') return Number(a.price) - Number(b.price);
+      if (filters.sort === 'price-desc') return Number(b.price) - Number(a.price);
+      if (filters.sort === 'name') return a.title.localeCompare(b.title, 'vi');
+      return Number(b.id) - Number(a.id);
+    });
+  }, [products, filters]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const visibleProducts = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const updateFilter = (name, value) => setFilters((current) => ({ ...current, [name]: value }));
+  const clearFilters = () => setFilters(initialFilters);
 
   return (
-    <>
-      
-      <main className="bg-light py-5">
-        <Container>
-          <div className="mb-4">
-            <h1 className="fw-bold text-primary text-center">Danh sách Sản Phẩm</h1>
-          </div>
+    <main className="catalog-page">
+      <Container>
+        <div className="catalog-header">
+          <span>Danh mục</span>
+          <h1>Tất cả sản phẩm</h1>
+          <p>Khám phá sản phẩm phù hợp theo nhu cầu và ngân sách của bạn.</p>
+        </div>
 
-          <Row>
-            {/*CỘT TRÁI (BỘ LỌC) */}
-            <Col lg={3}>
-              <Card className="p-3 shadow-sm border-0 sticky-top" style={{top: '6rem'}}>
-                <h5 className="fw-bold mb-3">Bộ lọc</h5>
-                
-                {/* Lọc theo Danh mục */}
-                <div className="mb-4">
-                  <h6 className="fw-semibold">Danh mục</h6>
-                  <ListGroup variant="flush">
-                    <ListGroup.Item 
-                      action 
-                      active={selectedCategory === ""} 
-                      onClick={() => setSelectedCategory("")}
-                      className="py-2"
-                    >
-                      Tất cả danh mục
-                    </ListGroup.Item>
-                    {categories.map(cat => (
-                      <ListGroup.Item 
-                        key={cat.slug} 
-                        action
-                        active={selectedCategory === cat.slug}
-                        onClick={() => setSelectedCategory(cat.slug)}
-                        className="py-2 text-capitalize" 
-                      >
-                        {cat.name}
-                      </ListGroup.Item>
-                    ))}
-                  </ListGroup>
-                </div>
+        <div className="search-layout catalog-layout">
+          <aside className="search-filters">
+            <div className="filter-heading">
+              <h2>Bộ lọc</h2>
+              <Button type="button" variant="link" onClick={clearFilters}>Xóa tất cả</Button>
+            </div>
 
-                {/* Sắp xếp */}
-                <div className="mb-3">
-                  <h6 className="fw-semibold">Sắp xếp theo</h6>
-                  <Form.Select value={sort} onChange={(e) => setSort(e.target.value)}>
-                    <option value="">Mặc định</option>
-                    <option value="low-high">Giá: Thấp đến Cao</option>
-                    <option value="high-low">Giá: Cao đến Thấp</option>
-                  </Form.Select>
-                </div>
-              </Card>
-            </Col>
-
-            {/*CỘT PHẢI (SẢN PHẨM)*/}
-            <Col lg={9}>
-              {/* Thanh tìm kiếm */}
-              <InputGroup className="mb-4 shadow-sm">
+            <Form.Group>
+              <Form.Label>Từ khóa</Form.Label>
+              <InputGroup>
+                <InputGroup.Text><i className="bi bi-search" /></InputGroup.Text>
                 <Form.Control
-                  size="lg"
-                  type="text"
-                  placeholder="Tìm kiếm sản phẩm bạn muốn..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={filters.search}
+                  onChange={(event) => updateFilter('search', event.target.value)}
+                  placeholder="Tên hoặc mô tả sản phẩm"
+                  aria-label="Tìm sản phẩm"
                 />
-                <InputGroup.Text><i className="bi bi-search"></i></InputGroup.Text>
               </InputGroup>
+            </Form.Group>
 
-              {/* Danh sách sản phẩm */}
-              {renderProductList()}
+            <Form.Group>
+              <Form.Label>Danh mục</Form.Label>
+              <Form.Select value={filters.category} onChange={(event) => updateFilter('category', event.target.value)}>
+                <option value="">Tất cả danh mục</option>
+                {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+              </Form.Select>
+            </Form.Group>
 
-              {/* Thanh phân trang */}
-              {totalPages > 1 && !loading && (
-                <div className="d-flex justify-content-center mt-5">
-                  <Pagination>
-                    <Pagination.First onClick={() => paginate(1)} disabled={currentPage === 1} />
-                    <Pagination.Prev onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} />
-                    {[...Array(totalPages).keys()].map(number => (
-                      <Pagination.Item 
-                        key={number + 1} 
-                        active={number + 1 === currentPage} 
-                        onClick={() => paginate(number + 1)}
-                      >
-                        {number + 1}
-                      </Pagination.Item>
-                    ))}
-                    <Pagination.Next onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages} />
-                    <Pagination.Last onClick={() => paginate(totalPages)} disabled={currentPage === totalPages} />
-                  </Pagination>
-                </div>
-              )}
-            </Col>
-          </Row>
-        </Container>
-      </main>
-    </>
+            <Form.Group>
+              <Form.Label>Khoảng giá</Form.Label>
+              <div className="price-range">
+                <Form.Control
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={filters.minPrice}
+                  onChange={(event) => updateFilter('minPrice', event.target.value)}
+                  placeholder="Từ"
+                  aria-label="Giá tối thiểu"
+                />
+                <span>-</span>
+                <Form.Control
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={filters.maxPrice}
+                  onChange={(event) => updateFilter('maxPrice', event.target.value)}
+                  placeholder="Đến"
+                  aria-label="Giá tối đa"
+                />
+              </div>
+            </Form.Group>
+
+            <Form.Group>
+              <Form.Label>Sắp xếp</Form.Label>
+              <Form.Select value={filters.sort} onChange={(event) => updateFilter('sort', event.target.value)}>
+                <option value="newest">Mới nhất</option>
+                <option value="price-asc">Giá thấp đến cao</option>
+                <option value="price-desc">Giá cao đến thấp</option>
+                <option value="name">Tên A-Z</option>
+              </Form.Select>
+            </Form.Group>
+          </aside>
+
+          <section className="search-results">
+            <div className="results-heading">
+              <div><strong>{filtered.length}</strong> sản phẩm</div>
+              {filters.search && <span>Kết quả cho “{filters.search}”</span>}
+            </div>
+
+            {loading && <div className="page-loader"><Spinner animation="border" /><span>Đang tải sản phẩm...</span></div>}
+            {error && <Alert variant="danger" className="d-flex justify-content-between align-items-center">{error}<Button size="sm" variant="outline-danger" onClick={loadProducts}>Thử lại</Button></Alert>}
+            {!loading && !error && visibleProducts.length === 0 && <div className="empty-state"><i className="bi bi-search" /><h2>Không tìm thấy sản phẩm</h2><p>Thử mở rộng khoảng giá hoặc chọn danh mục khác.</p><Button type="button" onClick={clearFilters}>Xóa bộ lọc</Button></div>}
+
+            <Row className="g-4">
+              {visibleProducts.map((product) => <Col key={product.id} xl={4} sm={6}><ProductCard product={product} /></Col>)}
+            </Row>
+
+            {!loading && totalPages > 1 && <Pagination className="justify-content-center mt-5">
+              <Pagination.Prev disabled={page === 1} onClick={() => setPage((value) => value - 1)} />
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map((number) => <Pagination.Item key={number} active={number === page} onClick={() => setPage(number)}>{number}</Pagination.Item>)}
+              <Pagination.Next disabled={page === totalPages} onClick={() => setPage((value) => value + 1)} />
+            </Pagination>}
+          </section>
+        </div>
+      </Container>
+    </main>
   );
 }

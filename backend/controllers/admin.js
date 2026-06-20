@@ -1,84 +1,64 @@
-const db = require("../db");
+const ProductModel = require('../models/ProductModel');
+const OrderModel = require('../models/OrderModel');
+const UserModel = require('../models/UserModel');
+const ApiError = require('../utils/ApiError');
 
-exports.getDashboardStats = async (req, res) => {
+exports.getDashboardStats = async (req, res, next) => {
   try {
-    //Thống kê tổng
-    const [[{ totalProducts = 0 } = {}]] = await db.query(
-      "SELECT COUNT(*) AS totalProducts FROM products"
-    );
+    const [productStats, orderStats, userStats, monthlyStats] = await Promise.all([
+      ProductModel.getStats(),
+      OrderModel.getStats(),
+      UserModel.getClientStats(),
+      OrderModel.getMonthlyStats(),
+    ]);
+    return res.json({ ...productStats, ...orderStats, ...userStats, monthlyStats });
+  } catch (error) {
+    return next(error);
+  }
+};
 
-    const [[{ totalOrders = 0 } = {}]] = await db.query(
-      "SELECT COUNT(*) AS totalOrders FROM orders"
-    );
+exports.getAllUsers = async (req, res, next) => {
+  try {
+    return res.json(await UserModel.findAll());
+  } catch (error) {
+    return next(error);
+  }
+};
 
-    const [[{ totalRevenue = 0 } = {}]] = await db.query(
-      "SELECT SUM(total) AS totalRevenue FROM orders WHERE status != 'cancelled'"
-    );
-
-    // Thống kê theo tháng 
-    const [monthlyStats] = await db.query(`
-      SELECT 
-        MONTH(created_at) AS month,
-        SUM(total) AS revenue,
-        COUNT(id) AS orders
-      FROM orders
-      WHERE status != 'cancelled'
-      GROUP BY MONTH(created_at)
-      ORDER BY MONTH(created_at)
-    `);
-
-    res.json({
-      totalProducts,
-      totalOrders,
-      totalRevenue,
-      monthlyStats,
+exports.updateUser = async (req, res, next) => {
+  try {
+    if (Number(req.params.id) === Number(req.user.id) && req.body.role !== 'admin') {
+      throw new ApiError(409, 'Bạn không thể tự thu hồi quyền quản trị của mình.', 'SELF_ROLE_CHANGE');
+    }
+    if (await UserModel.emailExists(req.body.email, req.params.id)) {
+      throw new ApiError(409, 'Email đang được sử dụng.', 'EMAIL_EXISTS');
+    }
+    const affectedRows = await UserModel.updateByAdmin({
+      id: req.params.id,
+      name: req.body.name,
+      email: req.body.email,
+      role: req.body.role,
     });
-  } catch (err) {
-    console.error("Lỗi khi lấy thống kê Dashboard:", err);
-    res
-      .status(500)
-      .json({ message: "Error fetching dashboard stats", error: err.message });
+    if (!affectedRows) throw new ApiError(404, 'Không tìm thấy người dùng.', 'USER_NOT_FOUND');
+    return res.json({ message: 'Đã cập nhật người dùng.' });
+  } catch (error) {
+    return next(error);
   }
 };
 
-exports.getAllUsers = async (req, res) => {
+exports.deleteUser = async (req, res, next) => {
   try {
-    const [users] = await db.query(
-      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC"
-    );
-    res.json(users);
-  } catch (err) {
-    console.error("Lỗi khi lấy danh sách người dùng:", err);
-    res.status(500).json({ message: "Error fetching users" });
-  }
-};
-
-//Cập nhật người dùng
-exports.updateUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email, role } = req.body;
-
-    await db.query(
-      "UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?",
-      [name, email, role, id]
-    );
-
-    res.json({ message: "Cập nhật người dùng thành công" });
-  } catch (err) {
-    console.error("Lỗi khi cập nhật người dùng:", err);
-    res.status(500).json({ message: "Error updating user" });
-  }
-};
-
-//Xóa người dùng
-exports.deleteUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-    await db.query("DELETE FROM users WHERE id = ?", [id]);
-    res.json({ message: "Xóa người dùng thành công" });
-  } catch (err) {
-    console.error("Lỗi khi xóa người dùng:", err);
-    res.status(500).json({ message: "Error deleting user" });
+    if (Number(req.params.id) === Number(req.user.id)) {
+      throw new ApiError(409, 'Bạn không thể xóa tài khoản đang đăng nhập.', 'SELF_DELETE');
+    }
+    if (await UserModel.countOrders(req.params.id)) {
+      throw new ApiError(409, 'Không thể xóa người dùng đã có đơn hàng. Hãy giữ lại để bảo toàn lịch sử.', 'USER_HAS_ORDERS');
+    }
+    if (!(await UserModel.deleteById(req.params.id))) {
+      throw new ApiError(404, 'Không tìm thấy người dùng.', 'USER_NOT_FOUND');
+    }
+    return res.json({ message: 'Đã xóa người dùng.' });
+  } catch (error) {
+    return next(error);
   }
 };

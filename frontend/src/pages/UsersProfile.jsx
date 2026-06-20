@@ -1,20 +1,22 @@
 import React, { useEffect, useState, useContext } from "react";
-import axios from "axios";
+import { adminService, userService } from "../services/api";
 import { Container,Card,Form,Button,Spinner,Alert,Table,Modal } from "react-bootstrap";
 import { AuthContext } from "../context/AuthContext";
 
 const UserProfile = () => {
-  const { token, user } = useContext(AuthContext);
+  const { user, updateUser } = useContext(AuthContext);
   const [profile, setProfile] = useState(null);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [editMode, setEditMode] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" });
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    password: "",
   });
 
   // Modal chỉnh sửa client
@@ -29,11 +31,9 @@ const UserProfile = () => {
   //Lấy thông tin người dùng hiện tại
   const fetchProfile = async () => {
     try {
-      const res = await axios.get("https://shoplite-vwur.onrender.com/api/auth/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setProfile(res.data.user);
-      setFormData({ ...res.data.user, password: "" });
+      const data = await userService.getProfile();
+      setProfile(data.user);
+      setFormData({ name: data.user.name, email: data.user.email });
     } catch (err) {
       console.error("Lỗi khi tải thông tin người dùng:", err);
       setError("Không thể tải thông tin tài khoản.");
@@ -42,13 +42,29 @@ const UserProfile = () => {
     }
   };
 
+  const handleChangePassword = async (event) => {
+    event.preventDefault();
+    setPasswordMessage({ type: "", text: "" });
+    if (passwordForm.next !== passwordForm.confirm) {
+      setPasswordMessage({ type: "danger", text: "Mật khẩu xác nhận không khớp." });
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      const data = await userService.changePassword(passwordForm.current, passwordForm.next);
+      setPasswordMessage({ type: "success", text: data.message });
+      setPasswordForm({ current: "", next: "", confirm: "" });
+    } catch (requestError) {
+      setPasswordMessage({ type: "danger", text: requestError.response?.data?.message || "Không thể đổi mật khẩu." });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   //Lấy danh sách client 
   const fetchClients = async () => {
     try {
-      const res = await axios.get("https://shoplite-vwur.onrender.com/api/admin/users", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setClients(res.data);
+      setClients(await adminService.getUsers());
     } catch (err) {
       console.error("Lỗi khi tải danh sách người dùng:", err);
     }
@@ -61,9 +77,8 @@ const UserProfile = () => {
     setSuccess("");
 
     try {
-      await axios.put("https://shoplite-vwur.onrender.com/api/auth/update", formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const data = await userService.updateProfile(formData);
+      updateUser(data.user);
       setSuccess("Cập nhật thông tin thành công!");
       setEditMode(false);
       fetchProfile();
@@ -81,13 +96,7 @@ const UserProfile = () => {
 
   const handleSaveClient = async () => {
     try {
-      await axios.put(
-        `https://shoplite-vwur.onrender.com/api/admin/users/${selectedClient.id}`,
-        selectedClient,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await adminService.updateUser(selectedClient.id, selectedClient);
       alert("Cập nhật người dùng thành công!");
       setShowModal(false);
       fetchClients();
@@ -101,9 +110,7 @@ const UserProfile = () => {
   const handleDeleteClient = async (id) => {
     if (window.confirm("Bạn có chắc muốn xóa người dùng này không?")) {
       try {
-        await axios.delete(`https://shoplite-vwur.onrender.com/api/admin/users/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await adminService.deleteUser(id);
         alert("Xóa thành công!");
         fetchClients();
       } catch (err) {
@@ -160,20 +167,6 @@ const UserProfile = () => {
               />
             </Form.Group>
 
-            {editMode && (
-              <Form.Group className="mb-3">
-                <Form.Label>Mật khẩu mới (tùy chọn)</Form.Label>
-                <Form.Control
-                  type="password"
-                  placeholder="Nhập mật khẩu mới nếu muốn đổi"
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                />
-              </Form.Group>
-            )}
-
             <p className="text-muted">
               <i className="bi bi-person-badge me-1"></i> Vai trò:{" "}
               <strong>{profile.role}</strong>
@@ -205,6 +198,18 @@ const UserProfile = () => {
             </div>
           </Form>
         )}
+      </Card>
+
+      <Card className="p-4 mt-4 shadow-sm border-0 account-security-card">
+        <Card.Title as="h3" className="fw-bold mb-1"><i className="bi bi-shield-lock me-2"></i>Bảo mật tài khoản</Card.Title>
+        <p className="text-muted">Đổi mật khẩu định kỳ để bảo vệ tài khoản và lịch sử đơn hàng.</p>
+        {passwordMessage.text && <Alert variant={passwordMessage.type}>{passwordMessage.text}</Alert>}
+        <Form onSubmit={handleChangePassword} className="password-form">
+          <Form.Group><Form.Label>Mật khẩu hiện tại</Form.Label><Form.Control type="password" value={passwordForm.current} onChange={(event) => setPasswordForm({ ...passwordForm, current: event.target.value })} required /></Form.Group>
+          <Form.Group><Form.Label>Mật khẩu mới</Form.Label><Form.Control type="password" minLength={8} value={passwordForm.next} onChange={(event) => setPasswordForm({ ...passwordForm, next: event.target.value })} required /></Form.Group>
+          <Form.Group><Form.Label>Xác nhận mật khẩu mới</Form.Label><Form.Control type="password" minLength={8} value={passwordForm.confirm} onChange={(event) => setPasswordForm({ ...passwordForm, confirm: event.target.value })} required /></Form.Group>
+          <Button type="submit" disabled={passwordLoading}>{passwordLoading ? <Spinner size="sm" /> : "Đổi mật khẩu"}</Button>
+        </Form>
       </Card>
 
       {/* Admin*/}

@@ -1,12 +1,13 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const { authenticate, isAdmin } = require("../middlewares/auth");
-const { getDashboardStats ,getAllUsers, updateUser, deleteUser} = require("../controllers/admin");
+const admin = require('../controllers/admin');
+const { authenticate, isAdmin } = require('../middlewares/auth');
+const { validate, idRules, adminUserRules } = require('../middlewares/validate');
 
-// Route thống kê dashboard
-router.get("/dashboard", authenticate, isAdmin, getDashboardStats);
-router.get("/users", authenticate, isAdmin, getAllUsers);
-router.put("/users/:id", authenticate, isAdmin, updateUser);
-router.delete("/users/:id", authenticate, isAdmin, deleteUser);
+router.use(authenticate, isAdmin);
+router.get('/dashboard', admin.getDashboardStats);
+router.get('/users', admin.getAllUsers);
+router.put('/users/:id', adminUserRules, validate, admin.updateUser);
+router.delete('/users/:id', idRules, validate, admin.deleteUser);
 
 module.exports = router;
