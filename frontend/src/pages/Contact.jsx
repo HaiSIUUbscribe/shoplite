@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Accordion, Alert, Button, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
+import { Accordion, Alert, Button, Col, Container, Form, Modal, Row, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { contactService } from '../services/api';
@@ -66,6 +66,12 @@ export default function Contact() {
       email: current.email || user.email || '',
     }));
   }, [user]);
+
+  useEffect(() => {
+    if (!success) return undefined;
+    const timer = window.setTimeout(() => setSuccess(''), 3000);
+    return () => window.clearTimeout(timer);
+  }, [success]);
 
   const update = (event) => {
     const { name, value } = event.target;
@@ -267,7 +273,6 @@ export default function Contact() {
               <Form id="contact-support-form" onSubmit={submit} className="contact-form" noValidate>
               <h2>Gửi yêu cầu hỗ trợ</h2>
 
-              {success && <Alert variant="success" className="contact-alert"><i className="bi bi-check-circle-fill me-2" />{success}</Alert>}
               {error && <Alert variant="warning" className="contact-alert"><i className="bi bi-exclamation-triangle-fill me-2" />{error}</Alert>}
 
               <Row className="g-3">
@@ -392,6 +397,29 @@ export default function Contact() {
           </Col>
         </Row>
       </Container>
+
+      <Modal
+        show={Boolean(success)}
+        onHide={() => setSuccess('')}
+        centered
+        backdrop="static"
+        className="contact-success-modal"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Gửi yêu cầu thành công</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <span className="contact-success-icon" aria-hidden="true">
+            <i className="bi bi-check-lg" />
+          </span>
+          <h2>Cảm ơn bạn đã liên hệ ShopLite</h2>
+          <p>{success}</p>
+          <small>Thông báo sẽ tự động đóng sau vài giây.</small>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button type="button" onClick={() => setSuccess('')}>Đóng</Button>
+        </Modal.Footer>
+      </Modal>
     </main>
   );
 }

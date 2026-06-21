@@ -92,6 +92,17 @@ a.contact-channel:hover { color: var(--brand); background: #f8faf9; }
 .contact-submit { margin-top: 1.5rem; padding: .75rem 2rem; border-radius: 9px; font-weight: 750; box-shadow: 0 10px 24px rgba(16,94,74,.22); transition: transform .12s ease; }
 .contact-submit:active { transform: scale(.97); }
 
+.contact-success-modal .modal-content { overflow: hidden; border: 0; border-radius: 10px; box-shadow: 0 24px 64px rgba(13,49,39,.22); }
+.contact-success-modal .modal-header { padding: 1rem 1.25rem; border-bottom-color: var(--line); }
+.contact-success-modal .modal-title { font-size: 1rem; font-weight: 800; }
+.contact-success-modal .modal-body { padding: 2rem 2rem 1.25rem; text-align: center; }
+.contact-success-icon { width: 64px; height: 64px; display: grid; place-items: center; margin: 0 auto 1rem; color: #fff; background: var(--brand); border-radius: 50%; font-size: 1.75rem; }
+.contact-success-modal .modal-body h2 { margin-bottom: .65rem; font-size: 1.3rem; font-weight: 850; }
+.contact-success-modal .modal-body p { margin: 0; color: #3f4d46; line-height: 1.6; }
+.contact-success-modal .modal-body small { display: block; margin-top: .65rem; color: var(--muted); }
+.contact-success-modal .modal-footer { justify-content: center; padding: 0 2rem 1.75rem; border-top: 0; }
+.contact-success-modal .modal-footer .btn { min-width: 128px; font-weight: 750; }
+
 .contact-auth-gate {
   min-height: 430px;
   display: flex;
