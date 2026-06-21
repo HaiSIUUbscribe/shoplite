@@ -1,79 +1,85 @@
-import React, { useEffect, useState } from 'react';
-import { Accordion, Alert, Badge, Button, Col, Container, Image, ListGroup, Row, Spinner } from 'react-bootstrap';
+import React, { useMemo, useState } from 'react';
+import { Accordion, Alert, Button, Container, Spinner } from 'react-bootstrap';
 import { Link, useLocation } from 'react-router-dom';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import { orderService } from '../services/api';
+import ReviewModal from '../components/ReviewModal';
+import useUserOrders from '../hooks/useUserOrders';
+import OrderCard from '../components/orders/OrderCard';
 import { formatCurrency } from '../utils/formatCurrency';
-import { orderStatuses } from '../utils/orderStatus';
-import { paymentMethodLabels, paymentStatusLabels } from '../utils/payment';
 
 export default function UserOrders() {
   const location = useLocation();
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    orderService.getMine()
-      .then((data) => setOrders(data))
-      .catch(() => setError('Không thể tải danh sách đơn hàng.'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const downloadInvoice = (order) => {
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text('SHOPLITE - HOA DON MUA HANG', 105, 20, { align: 'center' });
-    doc.setFontSize(11);
-    doc.text(`Ma don: #${order.id}`, 14, 34);
-    doc.text(`Ngay dat: ${new Date(order.created_at).toLocaleString('vi-VN')}`, 14, 42);
-    doc.text(`Nguoi nhan: ${order.customer_name || ''}`, 14, 50);
-    doc.autoTable({
-      startY: 60,
-      head: [['#', 'San pham', 'SL', 'Don gia', 'Thanh tien']],
-      body: order.items.map((item, index) => [index + 1, `${item.title}${item.size ? ` - Size ${item.size}` : ''}${item.color ? ` - ${item.color}` : ''}`, item.qty, formatCurrency(item.price), formatCurrency(item.price * item.qty)]),
-      headStyles: { fillColor: [16, 94, 74] },
-    });
-    doc.setFontSize(13);
-    doc.text(`Tong: ${formatCurrency(order.total)}`, 196, doc.lastAutoTable.finalY + 12, { align: 'right' });
-    doc.save(`shoplite-don-${order.id}.pdf`);
-  };
+  const { orders, reviewedIds, loading, error, markAsReviewed } = useUserOrders();
+  const [reviewTarget, setReviewTarget] = useState(null);
+  const overview = useMemo(() => ({
+    total: orders.length,
+    inProgress: orders.filter((order) => ['pending', 'processing', 'shipping'].includes(order.status)).length,
+    spent: orders
+      .filter((order) => order.status === 'done' || order.payment_status === 'paid')
+      .reduce((sum, order) => sum + Number(order.total || 0), 0),
+  }), [orders]);
 
   return (
     <Container className="orders-page">
-      <div className="page-title"><span>Tài khoản</span><h1>Đơn hàng của tôi</h1></div>
-      {location.state?.newOrderId && <Alert variant="success"><i className="bi bi-check-circle me-2" />Đặt hàng thành công. Mã đơn của bạn là <strong>#{location.state.newOrderId}</strong>.</Alert>}
-      {loading && <div className="page-loader"><Spinner animation="border" /><span>Đang tải đơn hàng...</span></div>}
+      <div className="orders-page-header">
+        <div className="page-title">
+          <span>Tài khoản</span>
+          <h1>Đơn hàng của tôi</h1>
+          <p>Theo dõi quá trình giao hàng và xem lại những sản phẩm bạn đã mua.</p>
+        </div>
+        <Button as={Link} to="/products" variant="outline-primary" className="orders-shop-more">
+          <i className="bi bi-bag-plus" />Mua thêm
+        </Button>
+      </div>
+
+      {!loading && !error && orders.length > 0 && (
+        <section className="orders-overview" aria-label="Tóm tắt đơn hàng">
+          <div><span>Tổng đơn hàng</span><strong>{overview.total}</strong></div>
+          <div><span>Đang xử lý</span><strong>{overview.inProgress}</strong></div>
+          <div><span>Tổng chi tiêu</span><strong>{formatCurrency(overview.spent)}</strong></div>
+        </section>
+      )}
+
+      {location.state?.newOrderId && (
+        <Alert variant="success">
+          <i className="bi bi-check-circle me-2" />
+          Đặt hàng thành công. Mã đơn của bạn là <strong>#{location.state.newOrderId}</strong>.
+        </Alert>
+      )}
+
+      {loading && (
+        <div className="page-loader">
+          <Spinner animation="border" /><span>Đang tải đơn hàng...</span>
+        </div>
+      )}
+
       {error && <Alert variant="danger">{error}</Alert>}
-      {!loading && !error && !orders.length && <div className="empty-state"><i className="bi bi-receipt" /><h2>Bạn chưa có đơn hàng</h2><p>Các đơn đã đặt sẽ xuất hiện tại đây.</p><Button as={Link} to="/products">Bắt đầu mua sắm</Button></div>}
-      <Accordion defaultActiveKey={orders[0] ? String(orders[0].id) : undefined}>
-        {orders.map((order) => {
-          const status = orderStatuses[order.status] || { label: order.status, color: 'secondary' };
-          return <Accordion.Item eventKey={String(order.id)} key={order.id} className="order-item">
-            <Accordion.Header>
-              <div className="order-heading"><div><strong>Đơn #{order.id}</strong><span>{new Date(order.created_at).toLocaleString('vi-VN')}</span></div><div><Badge bg={status.color}>{status.label}</Badge><strong>{formatCurrency(Number(order.total))}</strong></div></div>
-            </Accordion.Header>
-            <Accordion.Body>
-              <Row className="g-4">
-                <Col lg={8}>
-                  <ListGroup variant="flush">
-                    {order.items.map((item, index) => <ListGroup.Item key={`${order.id}-${item.product_id}-${item.size || ''}-${item.color || ''}-${index}`} className="order-product">
-                      {item.thumbnail ? <Image src={item.thumbnail} alt={item.title} /> : <div className="summary-placeholder"><i className="bi bi-image" /></div>}
-                      <div><strong>{item.title}</strong>{(item.size || item.color) && <span>{item.size && `Size ${item.size}`}{item.size && item.color && ' · '}{item.color}</span>}<span>{formatCurrency(Number(item.price))} x {item.qty}</span></div>
-                      <b>{formatCurrency(Number(item.price) * item.qty)}</b>
-                    </ListGroup.Item>)}
-                  </ListGroup>
-                </Col>
-                <Col lg={4}>
-                  <div className="delivery-info"><h3>Thông tin nhận hàng</h3><p><strong>{order.customer_name}</strong></p><p>{order.customer_phone}</p><p>{order.customer_address}</p><p>{paymentMethodLabels[order.payment_method] || order.payment_method}</p><p>{paymentStatusLabels[order.payment_status] || order.payment_status}</p></div>
-                </Col>
-              </Row>
-              <div className="order-actions mt-3"><Button as={Link} to={`/orders/${order.id}`} size="sm">Xem chi tiết <i className="bi bi-arrow-right ms-2" /></Button><Button variant="outline-dark" size="sm" onClick={() => downloadInvoice(order)}><i className="bi bi-file-earmark-pdf me-2" />Tải hóa đơn</Button></div>
-            </Accordion.Body>
-          </Accordion.Item>;
-        })}
+
+      {!loading && !error && !orders.length && (
+        <div className="empty-state orders-empty-state">
+          <i className="bi bi-receipt" />
+          <h2>Bạn chưa có đơn hàng</h2>
+          <p>Khám phá sản phẩm phù hợp và đơn hàng đầu tiên của bạn sẽ xuất hiện tại đây.</p>
+          <Button as={Link} to="/products"><i className="bi bi-bag me-2" />Bắt đầu mua sắm</Button>
+        </div>
+      )}
+
+      <Accordion className="orders-list">
+        {orders.map((order) => (
+          <OrderCard
+            key={order.id}
+            order={order}
+            reviewedIds={reviewedIds}
+            onReview={setReviewTarget}
+          />
+        ))}
       </Accordion>
+
+      <ReviewModal
+        show={!!reviewTarget}
+        product={reviewTarget}
+        onHide={() => setReviewTarget(null)}
+        onSuccess={markAsReviewed}
+      />
     </Container>
   );
 }

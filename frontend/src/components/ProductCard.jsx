@@ -1,14 +1,23 @@
 import React, { useContext, useState } from 'react';
 import { Badge, Button, Card } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { CartContext } from '../context/CartContext';
+import { AuthContext } from '../context/AuthContext';
+import { FavoriteContext } from '../context/FavoriteContext';
 import { formatCurrency } from '../utils/formatCurrency';
+import ProductQuickAddModal from './ProductQuickAddModal';
 
 export default function ProductCard({ product }) {
   const { addToCart } = useContext(CartContext);
+  const { user } = useContext(AuthContext);
+  const { favoriteIds, toggleFavorite } = useContext(FavoriteContext) || { favoriteIds: new Set(), toggleFavorite: () => {} };
+  const navigate = useNavigate();
+  const location = useLocation();
   const [imageFailed, setImageFailed] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
   const outOfStock = Number(product.stock) <= 0;
   const lowStock = !outOfStock && Number(product.stock) <= 5;
   const hasVariants = Boolean(product.sizes?.length || product.colors?.length);
@@ -17,10 +26,37 @@ export default function ProductCard({ product }) {
     ? Math.round(((Number(product.originalPrice) - Number(product.price)) / Number(product.originalPrice)) * 100)
     : 0;
 
-  const handleQuickAdd = () => {
-    addToCart(product);
-    setJustAdded(true);
-    window.setTimeout(() => setJustAdded(false), 1400);
+  const handleQuickAdd = async () => {
+    if (!user) {
+      navigate('/login', { state: { from: location.pathname + location.search } });
+      return;
+    }
+    const success = await addToCart(product);
+    if (success) {
+      setJustAdded(true);
+      window.setTimeout(() => setJustAdded(false), 1400);
+    }
+  };
+
+  const handleModalAdd = async ({ quantity, size, color }) => {
+    if (!user) {
+      navigate('/login', { state: { from: location.pathname + location.search } });
+      return;
+    }
+    const success = await addToCart(product, quantity, { size, color });
+    if (success) setShowModal(false);
+  };
+
+  const isFavorited = favoriteIds.has(product.id);
+
+  const handleFavoriteClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) {
+      navigate('/login', { state: { from: location.pathname + location.search } });
+      return;
+    }
+    toggleFavorite(product);
   };
 
   return (
@@ -44,6 +80,16 @@ export default function ProductCard({ product }) {
           <i className="bi bi-eye" /> Xem nhanh
         </span>
       </Link>
+
+      <Button 
+        variant="link" 
+        className={`product-favorite-btn ${isFavorited ? 'active' : ''}`}
+        onClick={handleFavoriteClick}
+        title={isFavorited ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'}
+        aria-label={isFavorited ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'}
+      >
+        <i className={`bi ${isFavorited ? 'bi-heart-fill text-danger' : 'bi-heart'}`} />
+      </Button>
 
       <Card.Body className="d-flex flex-column p-3">
         {product.category && <span className="product-category">{product.category}</span>}
@@ -73,9 +119,8 @@ export default function ProductCard({ product }) {
 
           {hasVariants ? (
             <Button
-              as={Link}
-              to={`/products/${product.id}`}
               className="icon-button variant-button"
+              onClick={(e) => { e.preventDefault(); setShowModal(true); }}
               disabled={outOfStock}
               title={outOfStock ? 'Sản phẩm đã hết hàng' : 'Chọn size và màu'}
               aria-label={`Chọn phiên bản ${product.title}`}
@@ -95,6 +140,15 @@ export default function ProductCard({ product }) {
           )}
         </div>
       </Card.Body>
+
+      {showModal && (
+        <ProductQuickAddModal
+          product={product}
+          show={showModal}
+          onHide={() => setShowModal(false)}
+          onAdd={handleModalAdd}
+        />
+      )}
     </Card>
   );
 }

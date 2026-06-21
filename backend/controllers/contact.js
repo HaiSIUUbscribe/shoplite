@@ -3,7 +3,12 @@ const ApiError = require('../utils/ApiError');
 
 exports.sendMessage = async (req, res, next) => {
   try {
-    const sent = await mailer.sendContactMessage(req.body);
+    const attachments = (req.files || []).map((file) => ({
+      filename: file.originalname.replace(/[^a-zA-Z0-9._ -]/g, '_'),
+      content: file.buffer,
+      contentType: file.mimetype,
+    }));
+    const sent = await mailer.sendContactMessage({ ...req.body, attachments });
     if (!sent) {
       throw new ApiError(
         503,

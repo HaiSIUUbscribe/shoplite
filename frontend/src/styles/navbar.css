@@ -1,0 +1,60 @@
+/* ── Navbar & Header ──────────────────────────────────────── */
+#main_header { position: relative; z-index: 1050; background: #fff; }
+
+.announcement-bar { min-height: 34px; display: flex; align-items: center; color: rgba(255,255,255,.78); background: var(--ink); font-size: .74rem; }
+.announcement-bar .container, .announcement-bar div { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; }
+.announcement-bar a { color: #fff; text-decoration: none; }
+.announcement-bar i { color: #f8c858; margin-right: .35rem; }
+
+.main-navbar { padding: .8rem 0 .35rem; border-bottom: 1px solid var(--line); box-shadow: 0 5px 18px rgba(23,33,29,.05); }
+.main-navbar > .container { flex-wrap: wrap; }
+.main-navbar .navbar-collapse { flex-basis: 100%; }
+
+.brand-logo { min-width: 170px; display: inline-flex; align-items: center; gap: .55rem; color: var(--ink) !important; font-size: 1.35rem; font-weight: 850; text-decoration: none; }
+.brand-logo i { color: var(--coral); }
+
+.header-search { width: min(540px, 46vw); margin: 0 auto; }
+.header-search .form-control { min-height: 46px; border-right: 0; background: var(--soft); }
+.header-search .btn { width: 50px; color: #fff; background: var(--brand); border-color: var(--brand); }
+
+.header-actions { width: 276px; min-width: 276px; display: grid; grid-template-columns: 44px 44px minmax(0, 1fr); align-items: center; justify-content: end; gap: .65rem; }
+.header-notification-slot { width: 44px; height: 44px; }
+.header-account-slot { min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: flex-end; }
+.header-account-slot > .dropdown { min-width: 0; max-width: 100%; }
+.header-account-skeleton { width: 104px; height: 42px; display: block; background: #edf1ef; border: 1px solid var(--line); border-radius: 6px; }
+.header-icon-button { position: relative; width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink); border: 1px solid var(--line); border-radius: 50%; font-size: 1.2rem; }
+.header-icon-button .badge { position: absolute; top: -6px; right: -7px; min-width: 20px; color: #fff; background: var(--coral); font-size: .62rem; }
+.login-button { min-height: 42px; }
+
+.mobile-menu-button { display: none; width: 40px; height: 40px; margin-left: auto; padding: 0; border: 1px solid var(--line); }
+.mobile-menu-button i { font-size: 1.45rem; }
+.mobile-menu .offcanvas-title { display: flex; align-items: center; gap: .5rem; font-weight: 850; }
+.mobile-menu .offcanvas-title i { color: var(--coral); }
+.mobile-search { margin-bottom: 1rem; }
+.mobile-nav { display: grid; }
+.mobile-nav a, .mobile-nav button { display: flex; align-items: center; justify-content: space-between; padding: .9rem 0; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line); font-weight: 700; text-align: left; text-decoration: none; }
+.mobile-nav a.active { color: var(--brand); }
+.mobile-nav a span { min-width: 24px; padding: .1rem .35rem; color: #fff; background: var(--coral); border-radius: 10px; font-size: .68rem; text-align: center; }
+.mobile-nav button { color: var(--coral); }
+
+.desktop-nav-only { display: flex !important; }
+.main-nav { margin: .55rem auto 0; }
+.main-nav .nav-link { color: #3e4843 !important; font-size: .87rem; font-weight: 650; margin: 0 .45rem; padding: .55rem .2rem; border-bottom: 2px solid transparent; }
+.main-nav .nav-link:hover, .main-nav .nav-link.active { color: var(--brand) !important; border-color: var(--brand); }
+
+.user-dropdown { display: inline-flex; align-items: center; gap: .4rem; color: var(--ink); font-weight: 700; max-width: 150px; }
+.user-dropdown > i { font-size: 1.35rem; }
+.user-dropdown span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (min-width: 992px) {
+  .main-navbar > .container {
+    display: grid;
+    grid-template-columns: 180px minmax(300px, 540px) 276px;
+    column-gap: 1rem;
+    justify-content: space-between;
+  }
+  .main-navbar .brand-logo { grid-column: 1; }
+  .main-navbar .header-search { grid-column: 2; width: 100%; margin: 0; }
+  .main-navbar .header-actions { grid-column: 3; }
+  .main-navbar .navbar-collapse { grid-column: 1 / -1; }
+}

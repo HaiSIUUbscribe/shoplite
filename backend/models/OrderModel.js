@@ -51,7 +51,9 @@ exports.findAllWithUsers = async () => {
 
 exports.findByIdForUpdate = async (connection, id) => {
   const [rows] = await connection.query(
-    'SELECT id, status, items, payment_method, payment_status, voucher_code FROM orders WHERE id = ? FOR UPDATE',
+    `SELECT id, user_id, status, items, total, customer_email,
+      payment_method, payment_status, voucher_code
+     FROM orders WHERE id = ? FOR UPDATE`,
     [id]
   );
   return rows[0] || null;

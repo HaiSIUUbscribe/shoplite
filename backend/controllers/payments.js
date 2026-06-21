@@ -11,7 +11,7 @@ const OrderModel = require('../models/OrderModel');
 const ProductModel = require('../models/ProductModel');
 const TransactionModel = require('../models/TransactionModel');
 const vnpayService = require('../services/vnpay');
-const { sendOrderConfirmationOnce } = require('../services/orderNotification');
+const dispatcher = require('../services/notificationDispatcher');
 
 function parseItems(items) {
   if (Array.isArray(items)) return items;
@@ -90,7 +90,16 @@ async function processVnpayCallback(query, source) {
     }
 
     await connection.commit();
-    if (successful) await sendOrderConfirmationOnce(transaction.order_id);
+    dispatcher.dispatch(
+      successful ? dispatcher.EVENTS.PAYMENT_SUCCESS : dispatcher.EVENTS.PAYMENT_FAILED,
+      {
+        orderId: transaction.order_id,
+        userId: transaction.user_id,
+        amount: Number(transaction.amount),
+        reason: successful ? '' : verification.message,
+        sendConfirmation: successful,
+      }
+    );
     return {
       outcome: successful ? 'success' : 'failed',
       successful,

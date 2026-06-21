@@ -13,6 +13,8 @@ exports.findByTxnRefForUpdate = async (connection, txnRef) => {
   const [rows] = await connection.query(
     `SELECT transactions.*,
       orders.status AS order_status,
+      orders.user_id,
+      orders.total AS order_total,
       orders.payment_status,
       orders.items,
       orders.customer_name,
@@ -56,4 +58,15 @@ exports.findLatestByOrderId = async (orderId) => {
     [orderId]
   );
   return rows[0] || null;
+};
+
+exports.countRecentFailures = async (minutes) => {
+  const [[row]] = await db.query(
+    `SELECT COUNT(*) AS total
+       FROM transactions
+      WHERE status = 'failed'
+        AND updated_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+    [minutes]
+  );
+  return Number(row.total);
 };

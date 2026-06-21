@@ -46,8 +46,20 @@ const excelUploader = multer({
   },
 });
 
+const contactImageUploader = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 3 },
+  fileFilter(req, file, callback) {
+    if (!imageExtensions[file.mimetype]) {
+      return callback(new multer.MulterError('LIMIT_UNEXPECTED_FILE', 'attachments'));
+    }
+    return callback(null, true);
+  },
+});
+
 module.exports = {
   uploadRoot,
   uploadProductImages: imageUploader.array('images', 6),
   uploadExcel: excelUploader.single('file'),
+  uploadContactImages: contactImageUploader.array('attachments', 3),
 };

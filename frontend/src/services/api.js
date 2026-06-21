@@ -1,16 +1,20 @@
-import axios from 'axios';
 import axiosClient from '../api/axiosClient';
-
-const locationClient = axios.create({
-  baseURL: 'https://provinces.open-api.vn/api',
-  timeout: 15000,
-});
 
 export const authService = {
   login: (email, password) => axiosClient.post('/auth/login', { email, password }).then((response) => response.data),
+  socialLogin: (token, provider) => axiosClient.post('/auth/social', { token, provider }).then((response) => response.data),
   register: (name, email, password) => axiosClient.post('/auth/register', { name, email, password }).then((response) => response.data),
   forgotPassword: (email) => axiosClient.post('/auth/forgot-password', { email }).then((response) => response.data),
   resetPassword: (token, password) => axiosClient.post('/auth/reset-password', { token, password }).then((response) => response.data),
+  refresh: () => axiosClient.post('/auth/refresh').then((response) => response.data),
+  logout: () => axiosClient.post('/auth/logout').then((response) => response.data),
+};
+export const cartService = {
+  getCart: () => axiosClient.get('/cart').then((res) => res.data),
+  addToCart: (productId, quantity, size, color) => axiosClient.post('/cart', { productId, quantity, size, color }).then((res) => res.data),
+  updateQty: (id, quantity) => axiosClient.put(`/cart/${id}`, { quantity }).then((res) => res.data),
+  removeItem: (id) => axiosClient.delete(`/cart/${id}`).then((res) => res.data),
+  clearCart: () => axiosClient.delete('/cart').then((res) => res.data),
 };
 
 export const userService = {
@@ -26,9 +30,12 @@ export const productService = {
   list: (params = {}) => axiosClient.get('/products', { params }).then((response) => response.data),
   categories: () => axiosClient.get('/products/categories').then((response) => response.data),
   getById: (id) => axiosClient.get(`/products/${id}`).then((response) => response.data),
-  create: (product) => axiosClient.post('/products', product).then((response) => response.data),
-  update: (id, product) => axiosClient.put(`/products/${id}`, product).then((response) => response.data),
+  create: (data) => axiosClient.post('/products', data).then((response) => response.data),
+  update: (id, data) => axiosClient.put(`/products/${id}`, data).then((response) => response.data),
   remove: (id) => axiosClient.delete(`/products/${id}`).then((response) => response.data),
+  getReviews: (id) => axiosClient.get(`/products/${id}/reviews`).then((res) => res.data),
+  addReview: (id, rating, comment) => axiosClient.post(`/products/${id}/reviews`, { rating, comment }).then((res) => res.data),
+  getMyReviewedProductIds: () => axiosClient.get('/products/reviews/mine').then((res) => res.data),
   downloadImportTemplate: () => axiosClient.get('/products/import-template', { responseType: 'blob' }).then((response) => response.data),
   importExcel: (file) => {
     const data = new FormData();
@@ -51,7 +58,14 @@ export const orderService = {
 };
 
 export const contactService = {
-  send: (message) => axiosClient.post('/contact', message).then((response) => response.data),
+  send: (message, attachments = []) => {
+    const data = new FormData();
+    Object.entries(message).forEach(([key, value]) => {
+      data.append(key === 'orderId' ? 'order_id' : key, value || '');
+    });
+    attachments.forEach((file) => data.append('attachments', file));
+    return axiosClient.post('/contact', data).then((response) => response.data);
+  },
 };
 
 export const newsletterService = {
@@ -68,12 +82,41 @@ export const voucherService = {
 };
 
 export const locationService = {
-  getVietnamLocations: () => locationClient.get('/', { params: { depth: 3 } }).then((response) => response.data),
+  getVietnamLocations: () => axiosClient.get('/locations/vietnam').then((response) => response.data),
 };
 
 export const adminService = {
   getDashboard: () => axiosClient.get('/admin/dashboard').then((response) => response.data),
-  getUsers: () => axiosClient.get('/admin/users').then((response) => response.data),
+  getUsers: (params = {}) => axiosClient.get('/admin/users', { params }).then((response) => response.data),
+  getUserById: (id) => axiosClient.get(`/admin/users/${id}`).then((response) => response.data),
   updateUser: (id, user) => axiosClient.put(`/admin/users/${id}`, user).then((response) => response.data),
+  updateUserStatus: (id, status) => axiosClient.patch(`/admin/users/${id}/status`, { status }).then((response) => response.data),
   deleteUser: (id) => axiosClient.delete(`/admin/users/${id}`).then((response) => response.data),
+};
+
+export const addressService = {
+  list: () => axiosClient.get('/addresses').then((res) => res.data),
+  create: (data) => axiosClient.post('/addresses', data).then((res) => res.data),
+  update: (id, data) => axiosClient.put(`/addresses/${id}`, data).then((res) => res.data),
+  remove: (id) => axiosClient.delete(`/addresses/${id}`).then((res) => res.data),
+  setDefault: (id) => axiosClient.patch(`/addresses/${id}/default`).then((res) => res.data),
+};
+
+export const notificationService = {
+  list: (params) => axiosClient.get('/notifications', { params }).then((res) => res.data),
+  count: () => axiosClient.get('/notifications/count').then((res) => res.data),
+  markRead: (id) => axiosClient.patch(`/notifications/${id}/read`).then((res) => res.data),
+  markAllRead: () => axiosClient.patch('/notifications/read-all').then((res) => res.data),
+  deleteOne: (id) => axiosClient.delete(`/notifications/${id}`).then((res) => res.data),
+  getPreferences: () => axiosClient.get('/notifications/preferences').then((res) => res.data),
+  setPreferences: (data) => axiosClient.put('/notifications/preferences', data).then((res) => res.data),
+  getSettings: () => axiosClient.get('/notifications/settings').then((res) => res.data),
+  setSettings: (data) => axiosClient.put('/notifications/settings', data).then((res) => res.data),
+};
+
+export const favoriteService = {
+  getMine: () => axiosClient.get('/favorites').then((res) => res.data),
+  getMineIds: () => axiosClient.get('/favorites/ids').then((res) => res.data),
+  add: (productId) => axiosClient.post('/favorites', { productId }).then((res) => res.data),
+  remove: (productId) => axiosClient.delete(`/favorites/${productId}`).then((res) => res.data),
 };

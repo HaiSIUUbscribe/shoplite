@@ -10,6 +10,11 @@ coverage/
 !.env.example
 *.log
 backend/uploads/
+tmp/
+.vercel/
+*.pem
+*.key
+*.p12
 
 # Editors and operating systems
 .DS_Store

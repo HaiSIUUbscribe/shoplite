@@ -1,0 +1,10 @@
+/* ── Footer ────────────────────────────────────────────────── */
+.site-footer { margin-top: 0; padding: 3.5rem 0 1.5rem; color: rgba(255,255,255,.72); background: #17211d; }
+.footer-brand { display: inline-flex; align-items: center; gap: .5rem; color: #fff; font-size: 1.35rem; font-weight: 800; text-decoration: none; margin-bottom: .9rem; }
+.footer-brand i { color: #ef755e; }
+.site-footer p { max-width: 470px; line-height: 1.7; }
+.site-footer h2 { color: #fff; font-size: .92rem; font-weight: 750; margin-bottom: 1rem; }
+.site-footer a, .site-footer span { display: block; color: rgba(255,255,255,.72); text-decoration: none; margin-bottom: .65rem; }
+.site-footer a:hover { color: #fff; }
+.site-footer i { width: 22px; display: inline-block; }
+.footer-bottom { display: flex; justify-content: space-between; gap: 1rem; margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid rgba(255,255,255,.12); font-size: .78rem; }

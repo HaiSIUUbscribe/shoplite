@@ -1,9 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const jwt = require('jsonwebtoken');
 const ExcelJS = require('exceljs');
+
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'shoplite-test-secret-with-at-least-32-characters';
 const products = require('../controllers/products');
+const orders = require('../controllers/orders');
 const newsletter = require('../controllers/newsletter');
 const NewsletterModel = require('../models/NewsletterModel');
+const OrderModel = require('../models/OrderModel');
+const TransactionModel = require('../models/TransactionModel');
 const voucherService = require('../services/voucher');
 const app = require('../server');
 
@@ -85,6 +91,39 @@ test('protects the user profile route with the global error format', async () =>
   }
 });
 
+test('always scopes the customer order detail endpoint to the order owner', async () => {
+  const originalFindByIdAndUserId = OrderModel.findByIdAndUserId;
+  const originalFindById = OrderModel.findById;
+  const originalFindLatest = TransactionModel.findLatestByOrderId;
+  let ownerLookup;
+  let unrestrictedLookupCalled = false;
+  OrderModel.findByIdAndUserId = async (id, userId) => {
+    ownerLookup = { id, userId };
+    return { id: Number(id), user_id: Number(userId), items: '[]' };
+  };
+  OrderModel.findById = async () => {
+    unrestrictedLookupCalled = true;
+    return null;
+  };
+  TransactionModel.findLatestByOrderId = async () => null;
+
+  try {
+    const response = createResponse();
+    await orders.getOrderById(
+      { params: { id: '8' }, user: { id: 42, role: 'admin' } },
+      response,
+      failOnNext
+    );
+    assert.deepEqual(ownerLookup, { id: '8', userId: 42 });
+    assert.equal(unrestrictedLookupCalled, false);
+    assert.equal(response.body.user_id, 42);
+  } finally {
+    OrderModel.findByIdAndUserId = originalFindByIdAndUserId;
+    OrderModel.findById = originalFindById;
+    TransactionModel.findLatestByOrderId = originalFindLatest;
+  }
+});
+
 test('rejects invalid password reset tokens safely', async () => {
   const server = app.listen(0);
   try {
@@ -106,14 +145,37 @@ test('validates contact messages before attempting email delivery', async () => 
   const server = app.listen(0);
   try {
     const { port } = server.address();
+    const token = jwt.sign({ id: 1, email: 'buyer@example.com', role: 'client' }, process.env.JWT_SECRET);
     const response = await fetch(`http://127.0.0.1:${port}/api/contact`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ name: 'A', email: 'invalid', subject: '', message: 'short' }),
     });
     const body = await response.json();
     assert.equal(response.status, 422);
     assert.equal(body.code, 'VALIDATION_ERROR');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('requires authentication before accepting contact requests', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/api/contact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Guest user',
+        email: 'guest@example.com',
+        subject: 'other',
+        message: 'I need help with an order.',
+      }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 401);
+    assert.equal(body.code, 'AUTH_REQUIRED');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

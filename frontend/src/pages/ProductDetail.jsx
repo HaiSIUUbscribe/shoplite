@@ -1,112 +1,60 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Button, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { productService, voucherService } from '../services/api';
-import { CartContext } from '../context/CartContext';
-import { AuthContext } from '../context/AuthContext';
+import React from 'react';
+import { Alert, Badge, Button, Col, Container, Row, Spinner } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatCurrency';
+import useProductDetail from '../hooks/useProductDetail';
+import { AuthContext } from '../context/AuthContext';
+import { FavoriteContext } from '../context/FavoriteContext';
+import ProductGallery from '../components/product/ProductGallery';
+import ProductVariantSelector from '../components/product/ProductVariantSelector';
+import ProductActions from '../components/product/ProductActions';
+import ProductReviews from '../components/product/ProductReviews';
+import ProductVoucherOffer from '../components/product/ProductVoucherOffer';
 
 export default function ProductDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { addToCart, startBuyNow } = useContext(CartContext);
-  const { user } = useContext(AuthContext);
-  const [product, setProduct] = useState(null);
-  const [quantity, setQuantity] = useState(1);
-  const [selectedSize, setSelectedSize] = useState('');
-  const [selectedColor, setSelectedColor] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [imageFailed, setImageFailed] = useState(false);
-  const [activeImage, setActiveImage] = useState(0);
-  const [justAdded, setJustAdded] = useState(false);
-  const [voucherSaving, setVoucherSaving] = useState(false);
-  const [voucherClaimStatus, setVoucherClaimStatus] = useState('idle');
-  const [voucherClaimMessage, setVoucherClaimMessage] = useState('Nhận mã qua email, giảm tối đa 100.000đ');
+  const {
+    product, loading, error,
+    gallery, discount, COLOR_MAP,
+    selectedSize, setSelectedSize,
+    selectedColor, setSelectedColor,
+    quantity, setQuantity,
+    activeImage, setActiveImage,
+    imageFailed, setImageFailed,
+    justAdded,
+    reviewStats, setReviewStats,
+    handleAddToCart, handleBuyNow,
+  } = useProductDetail(id);
 
-  useEffect(() => {
-    if (!user) return;
-    try {
-      const saved = JSON.parse(window.localStorage.getItem('shoplite_saved_voucher_v1') || 'null');
-      if (saved?.userId === user.id && saved?.voucher?.code) {
-        setVoucherClaimStatus('saved');
-        setVoucherClaimMessage(`Đã lưu mã ${saved.voucher.code} để dùng khi thanh toán`);
-      }
-    } catch {
-      window.localStorage.removeItem('shoplite_saved_voucher_v1');
+  const { user } = React.useContext(AuthContext);
+  const { favoriteIds, toggleFavorite } = React.useContext(FavoriteContext) || { favoriteIds: new Set(), toggleFavorite: () => {} };
+  
+  const isFavorited = product && favoriteIds.has(product.id);
+  const navigate = require('react-router-dom').useNavigate;
+  const location = require('react-router-dom').useLocation;
+  const nav = navigate();
+  const loc = location();
+
+  const handleFavoriteClick = () => {
+    if (!user) {
+      nav('/login', { state: { from: loc.pathname + loc.search } });
+      return;
     }
-  }, [user]);
-
-  useEffect(() => {
-    setLoading(true);
-    productService.getById(id)
-      .then((data) => {
-        setProduct(data);
-        setSelectedSize(data.sizes?.[0] || '');
-        setSelectedColor(data.colors?.[0] || '');
-        setActiveImage(0);
-      })
-      .catch((requestError) => setError(requestError.response?.status === 404 ? 'Sản phẩm không tồn tại hoặc đã ngừng bán.' : 'Không thể tải thông tin sản phẩm.'))
-      .finally(() => setLoading(false));
-  }, [id]);
-
-  const gallery = useMemo(() => {
-    if (!product) return [];
-    const images = Array.isArray(product.images) && product.images.length > 0 ? product.images : [];
-    return product.thumbnail ? [product.thumbnail, ...images.filter((src) => src !== product.thumbnail)] : images;
-  }, [product]);
+    toggleFavorite(product);
+  };
 
   if (loading) return <div className="page-loader"><Spinner animation="border" /><span>Đang tải sản phẩm...</span></div>;
-  if (error) return <Container className="py-5"><Alert variant="warning">{error}</Alert><Button as={Link} to="/products" variant="outline-dark">Quay lại sản phẩm</Button></Container>;
+  if (error) return (
+    <Container className="py-5">
+      <Alert variant="warning">{error}</Alert>
+      <Link to="/products" className="btn btn-outline-dark">Quay lại sản phẩm</Link>
+    </Container>
+  );
 
   const stock = Number(product.stock);
   const sizes = Array.isArray(product.sizes) ? product.sizes : [];
   const colors = Array.isArray(product.colors) ? product.colors : [];
-  const selectedOptions = { size: selectedSize || null, color: selectedColor || null };
-  const hasDiscount = Number(product.originalPrice) > Number(product.price);
-  const discountPercent = hasDiscount
-    ? Math.round(((Number(product.originalPrice) - Number(product.price)) / Number(product.originalPrice)) * 100)
-    : 0;
-  const colorValues = {
-    'đen': '#1f2421', 'trắng': '#ffffff', 'xám': '#9ca3af', 'xanh navy': '#263b59',
-    'xanh': '#2f6f9f', 'đỏ': '#c9413b', 'hồng': '#df8fa3', 'nâu': '#7a5948',
-    'be': '#d8c9aa', 'vàng': '#e7bd38', 'tím': '#76528b', 'cam': '#dd7a32',
-  };
-
-  const buyNow = () => {
-    if (startBuyNow(product, quantity, selectedOptions)) navigate('/checkout?mode=buy-now');
-  };
-
-  const handleAddToCart = () => {
-    addToCart(product, quantity, selectedOptions);
-    setJustAdded(true);
-    window.setTimeout(() => setJustAdded(false), 1600);
-  };
-
-  const claimVoucher = async () => {
-    if (!user) {
-      navigate('/login', { state: { from: `/products/${id}` } });
-      return;
-    }
-    if (voucherClaimStatus === 'saved') return;
-
-    setVoucherSaving(true);
-    setVoucherClaimStatus('idle');
-    try {
-      const data = await voucherService.claim();
-      window.localStorage.setItem('shoplite_saved_voucher_v1', JSON.stringify({
-        userId: user.id,
-        voucher: data.voucher,
-      }));
-      setVoucherClaimStatus('saved');
-      setVoucherClaimMessage(`Đã lưu mã ${data.voucher.code} để dùng khi thanh toán`);
-    } catch (requestError) {
-      setVoucherClaimStatus('error');
-      setVoucherClaimMessage(requestError.response?.data?.message || 'Không thể lưu voucher. Vui lòng thử lại.');
-    } finally {
-      setVoucherSaving(false);
-    }
-  };
 
   return (
     <Container className="product-detail-page">
@@ -128,30 +76,16 @@ export default function ProductDetail() {
 
       <Row className="g-5">
         <Col lg={6}>
-          <div className="detail-gallery">
-            <div className="detail-media">
-              {hasDiscount && <span className="detail-discount-flag">-{discountPercent}%</span>}
-              {!imageFailed && gallery[activeImage] ? (
-                <img src={gallery[activeImage]} alt={product.title} onError={() => setImageFailed(true)} />
-              ) : (
-                <i className="bi bi-image" />
-              )}
-            </div>
-            {gallery.length > 1 && (
-              <div className="detail-thumb-row">
-                {gallery.map((src, index) => (
-                  <button
-                    type="button"
-                    key={src + index}
-                    className={`detail-thumb ${activeImage === index ? 'active' : ''}`}
-                    onClick={() => { setActiveImage(index); setImageFailed(false); }}
-                  >
-                    <img src={src} alt={`${product.title} ${index + 1}`} />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <ProductGallery
+            gallery={gallery}
+            activeImage={activeImage}
+            onThumbClick={(i) => { setActiveImage(i); setImageFailed(false); }}
+            imageFailed={imageFailed}
+            onImageError={() => setImageFailed(true)}
+            title={product.title}
+            hasDiscount={discount.hasDiscount}
+            discountPercent={discount.percent}
+          />
 
           <div className="detail-trust-grid">
             <div><i className="bi bi-truck" /><div><strong>Giao hàng nhanh</strong><span>Toàn quốc 2-4 ngày</span></div></div>
@@ -163,90 +97,93 @@ export default function ProductDetail() {
         <Col lg={6}>
           <div className="detail-info-panel">
             {product.category && <Badge bg="light" text="dark" className="detail-category">{product.category}</Badge>}
-            <h1>{product.title}</h1>
+            <div className="d-flex justify-content-between align-items-start">
+              <h1 className="mb-0 pe-3">{product.title}</h1>
+              <Button 
+                variant="light" 
+                className="rounded-circle d-flex align-items-center justify-content-center p-2 shadow-sm flex-shrink-0" 
+                style={{ width: '48px', height: '48px' }}
+                onClick={handleFavoriteClick}
+                title={isFavorited ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'}
+              >
+                <i className={`bi ${isFavorited ? 'bi-heart-fill text-danger' : 'bi-heart'}`} style={{ fontSize: '1.4rem', marginTop: '2px' }} />
+              </Button>
+            </div>
 
             <div className="detail-rating-row" aria-hidden="true">
-              {Array.from({ length: 5 }, (_, index) => (
-                <i key={index} className={`bi ${index < 4 ? 'bi-star-fill' : 'bi-star'}`} />
+              {Array.from({ length: 5 }, (_, i) => (
+                <i key={i} className={`bi ${i < Math.round(reviewStats.average) ? 'bi-star-fill' : 'bi-star'}`} />
               ))}
-              <span>({((Number(product.id) || 1) * 7) % 89 + 12} đánh giá)</span>
+              <span>({reviewStats.count} đánh giá)</span>
             </div>
 
             <div className="detail-price-row">
               <p className="detail-price">{formatCurrency(Number(product.price) * quantity)}</p>
-              {hasDiscount && <span className="detail-price-original">{formatCurrency(Number(product.originalPrice) * quantity)}</span>}
+              {discount.hasDiscount && <span className="detail-price-original">{formatCurrency(Number(product.originalPrice) * quantity)}</span>}
               {quantity > 1 && <span className="detail-price-unit">{quantity} × {formatCurrency(Number(product.price))}</span>}
             </div>
 
             <p className="detail-description">{product.description || 'Thông tin sản phẩm đang được cập nhật.'}</p>
 
-            <div className="detail-voucher-offer">
-              <i className="bi bi-ticket-perforated" aria-hidden="true" />
-              <div><strong>Voucher thành viên mới giảm 10%</strong><span className={voucherClaimStatus === 'error' ? 'is-error' : ''}>{voucherClaimMessage}</span></div>
-              <Button type="button" variant="link" onClick={claimVoucher} disabled={voucherSaving || voucherClaimStatus === 'saved'}>
-                {voucherSaving ? <Spinner animation="border" size="sm" /> : voucherClaimStatus === 'saved' ? 'Đã lưu' : 'Nhận mã'}
-              </Button>
+            <ProductVoucherOffer productId={product.id} />
+
+            <ProductVariantSelector
+              sizes={sizes}
+              colors={colors}
+              colorMap={COLOR_MAP}
+              selectedSize={selectedSize}
+              selectedColor={selectedColor}
+              onSizeChange={setSelectedSize}
+              onColorChange={setSelectedColor}
+            />
+
+            <ProductActions
+              stock={stock}
+              quantity={quantity}
+              justAdded={justAdded}
+              onQuantityChange={setQuantity}
+              onAddToCart={handleAddToCart}
+              onBuyNow={handleBuyNow}
+            />
+          </div>
+        </Col>
+      </Row>
+
+      <Row className="mt-4">
+        <Col>
+          <div className="product-extended-details">
+            <h2 className="extended-section-title">Chi tiết sản phẩm</h2>
+            <table className="product-specs-table">
+              <tbody>
+                <tr>
+                  <th>Danh mục</th>
+                  <td>
+                    <nav className="detail-breadcrumb d-inline p-0 m-0 bg-transparent">
+                      <Link to="/">Trang chủ</Link>
+                      <i className="bi bi-chevron-right mx-1" />
+                      <Link to="/products">Sản phẩm</Link>
+                      {product.category && (
+                        <>
+                          <i className="bi bi-chevron-right mx-1" />
+                          <Link to={`/products?category=${encodeURIComponent(product.category)}`}>{product.category}</Link>
+                        </>
+                      )}
+                    </nav>
+                  </td>
+                </tr>
+                <tr><th>Kho hàng</th><td>{stock}</td></tr>
+                <tr><th>Thương hiệu</th><td>OEM</td></tr>
+                <tr><th>Xuất xứ</th><td>Việt Nam</td></tr>
+                <tr><th>Gửi từ</th><td>Hà Nội</td></tr>
+              </tbody>
+            </table>
+
+            <div className="mt-5 pt-4 border-top">
+              <h4>Mô tả sản phẩm</h4>
+              <div className="text-muted lh-lg" style={{ whiteSpace: 'pre-line' }}>{product.description}</div>
             </div>
 
-            {sizes.length > 0 && (
-              <div className="variant-selector">
-                <div className="variant-heading"><span>Chọn size</span><strong>{selectedSize}</strong></div>
-                <div className="size-options">
-                  {sizes.map((size) => (
-                    <button type="button" key={size} className={selectedSize === size ? 'active' : ''} onClick={() => setSelectedSize(size)}>{size}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {colors.length > 0 && (
-              <div className="variant-selector">
-                <div className="variant-heading"><span>Chọn màu</span><strong>{selectedColor}</strong></div>
-                <div className="color-options">
-                  {colors.map((color) => (
-                    <button type="button" key={color} className={selectedColor === color ? 'active' : ''} onClick={() => setSelectedColor(color)}>
-                      <span style={{ backgroundColor: colorValues[color.toLocaleLowerCase('vi')] || '#d5dbd8' }} />
-                      {color}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className={`stock-line ${stock > 0 ? 'available' : 'unavailable'}`}>
-              <i className={`bi ${stock > 0 ? 'bi-check-circle' : 'bi-x-circle'}`} />
-              {stock > 0 ? `Còn ${stock} sản phẩm` : 'Tạm hết hàng'}
-            </div>
-
-            <div className="detail-actions">
-              <Form.Control
-                type="number"
-                min="1"
-                max={Math.max(stock, 1)}
-                value={quantity}
-                onChange={(event) => setQuantity(Math.max(1, Math.min(stock, Number(event.target.value) || 1)))}
-                aria-label="Số lượng"
-                disabled={stock <= 0}
-              />
-              <Button
-                size="lg"
-                variant="outline-success"
-                className={`add-to-cart-button ${justAdded ? 'is-added' : ''}`}
-                onClick={handleAddToCart}
-                disabled={stock <= 0}
-              >
-                <i className={`bi ${justAdded ? 'bi-check-lg' : 'bi-cart-plus'} me-2`} />
-                {justAdded ? 'Đã thêm' : 'Thêm vào giỏ'}
-              </Button>
-              <Button size="lg" className="buy-now-button" onClick={buyNow} disabled={stock <= 0}>
-                <i className="bi bi-lightning-charge-fill me-2" />Mua ngay
-              </Button>
-            </div>
-
-            <div className="purchase-notes">
-              <span><i className="bi bi-truck" /> Giao hàng toàn quốc</span>
-              <span><i className="bi bi-shield-check" /> Kiểm tra tồn kho tức thời</span>
-            </div>
+            <ProductReviews productId={product.id} onStatsChange={setReviewStats} />
           </div>
         </Col>
       </Row>

@@ -1,16 +1,18 @@
 import React, { useContext, useState } from 'react';
 import { Alert, Button, Card, Container, Form, InputGroup, Spinner } from 'react-bootstrap';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { AuthContext } from '../context/AuthContext';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const googleLoginEnabled = Boolean(process.env.REACT_APP_GOOGLE_CLIENT_ID?.trim());
 
 export default function Login() {
-  const { login } = useContext(AuthContext);
+  const { login, socialLogin } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(location.state?.email || '');
+  const [password, setPassword] = useState(location.state?.password || '');
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
@@ -35,6 +37,18 @@ export default function Login() {
       navigate(location.state?.from || '/', { replace: true });
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Email hoặc mật khẩu không chính xác.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setLoading(true);
+    try {
+      await socialLogin(credentialResponse.credential, 'google');
+      navigate(location.state?.from || '/', { replace: true });
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Đăng nhập Google thất bại.');
     } finally {
       setLoading(false);
     }
@@ -103,6 +117,20 @@ export default function Login() {
                 {loading ? <><Spinner animation="border" size="sm" className="me-2" />Đang xử lý...</> : <><i className="bi bi-box-arrow-in-right me-2" />Đăng nhập</>}
               </Button>
             </Form>
+
+            {googleLoginEnabled && <><div className="d-flex align-items-center my-3">
+              <hr className="flex-grow-1" />
+              <span className="mx-2 text-muted small">hoặc</span>
+              <hr className="flex-grow-1" />
+            </div>
+
+            <div className="d-flex justify-content-center mb-4">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => setError('Đăng nhập Google thất bại.')}
+                useOneTap
+              />
+            </div></>}
 
             <div className="login-register-link"><span>Chưa có tài khoản?</span><Link to="/register">Đăng ký ngay</Link></div>
           </Card.Body>

@@ -6,7 +6,7 @@ const VoucherModel = require('../models/VoucherModel');
 const ApiError = require('../utils/ApiError');
 const vnpayService = require('../services/vnpay');
 const voucherService = require('../services/voucher');
-const { sendOrderConfirmationOnce } = require('../services/orderNotification');
+const dispatcher = require('../services/notificationDispatcher');
 
 function parseOrderItems(items) {
   if (Array.isArray(items)) return items;
@@ -91,8 +91,16 @@ exports.createOrder = async (req, res, next) => {
     const discountAmount = voucherResult?.discountAmount || 0;
     const total = subtotal - discountAmount;
 
+    const stockChanges = [];
     for (const [productId, qty] of quantities) {
+      const product = productById.get(productId);
       await ProductModel.decrementStock(connection, productId, qty);
+      stockChanges.push({
+        productId,
+        productTitle: product.title,
+        previousStock: Number(product.stock),
+        stock: Number(product.stock) - qty,
+      });
     }
 
     const paymentMethod = req.body.payment_method || 'cod';
@@ -135,7 +143,14 @@ exports.createOrder = async (req, res, next) => {
     }
 
     await connection.commit();
-    if (paymentMethod !== 'vnpay') await sendOrderConfirmationOnce(orderId);
+    dispatcher.dispatch(dispatcher.EVENTS.ORDER_CREATED, {
+      orderId,
+      userId: req.user.id,
+      total,
+      customerName: req.body.customer_name,
+      sendConfirmation: paymentMethod !== 'vnpay',
+    });
+    stockChanges.forEach((change) => dispatcher.dispatch(dispatcher.EVENTS.STOCK_CHANGED, change));
     return res.status(201).json({
       message: paymentUrl ? 'Đã tạo phiên thanh toán VNPay.' : 'Đặt hàng thành công.',
       orderId,
@@ -171,9 +186,7 @@ exports.getAllOrders = async (req, res, next) => {
 
 exports.getOrderById = async (req, res, next) => {
   try {
-    const order = req.user.role === 'admin'
-      ? await OrderModel.findById(req.params.id)
-      : await OrderModel.findByIdAndUserId(req.params.id, req.user.id);
+    const order = await OrderModel.findByIdAndUserId(req.params.id, req.user.id);
     if (!order) throw new ApiError(404, 'Không tìm thấy đơn hàng.', 'ORDER_NOT_FOUND');
     const transaction = await TransactionModel.findLatestByOrderId(order.id);
     return res.json({ ...order, items: parseOrderItems(order.items), transaction });
@@ -206,10 +219,26 @@ exports.updateStatus = async (req, res, next) => {
       if (order.voucher_code) await VoucherModel.releaseByOrderId(connection, order.id);
     }
     await OrderModel.updateStatus(connection, req.params.id, req.body.status);
-    if (req.body.status === 'done' && order.payment_status !== 'paid') {
+    const paymentMarkedPaid = req.body.status === 'done' && order.payment_status !== 'paid';
+    if (paymentMarkedPaid) {
       await OrderModel.updatePaymentStatus(connection, req.params.id, 'paid');
     }
     await connection.commit();
+    // Thông báo cho client về thay đổi trạng thái
+    dispatcher.dispatch(dispatcher.EVENTS.ORDER_STATUS, {
+      orderId: req.params.id,
+      userId: order.user_id,
+      status: req.body.status,
+      customerEmail: order.customer_email,
+    });
+    if (paymentMarkedPaid) {
+      dispatcher.dispatch(dispatcher.EVENTS.PAYMENT_SUCCESS, {
+        orderId: req.params.id,
+        userId: order.user_id,
+        amount: Number(order.total),
+        sendConfirmation: false,
+      });
+    }
     return res.json({ message: 'Đã cập nhật trạng thái đơn hàng.' });
   } catch (error) {
     if (connection) await connection.rollback();
