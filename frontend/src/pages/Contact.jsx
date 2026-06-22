@@ -148,7 +148,11 @@ export default function Contact() {
       setAttachments([]);
       if (attachmentInputRef.current) attachmentInputRef.current.value = '';
     } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Không thể gửi yêu cầu hỗ trợ. Vui lòng thử lại sau.');
+      if (requestError.code === 'ECONNABORTED') {
+        setError('Máy chủ email phản hồi quá chậm. Vui lòng thử lại sau.');
+      } else {
+        setError(requestError.response?.data?.message || 'Không thể kết nối máy chủ hỗ trợ. Vui lòng thử lại sau.');
+      }
     } finally {
       setLoading(false);
     }

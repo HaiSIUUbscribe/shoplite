@@ -26,8 +26,11 @@ exports.errorHandler = (error, req, res, next) => {
   const status = Number(normalized.status) || 500;
   if (status >= 500) console.error(normalized);
 
+  const isOperationalError = normalized instanceof ApiError;
   const response = {
-    message: status >= 500 ? 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.' : normalized.message,
+    message: status >= 500 && !isOperationalError
+      ? 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.'
+      : normalized.message,
     code: normalized.code || 'INTERNAL_SERVER_ERROR',
   };
   if (normalized.details) response.details = normalized.details;

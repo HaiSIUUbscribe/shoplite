@@ -36,9 +36,13 @@ export default function NewsletterSignup() {
       setStatus(nextStatus);
       setMessage(data.message || (nextStatus === 'success' ? 'Mã voucher đã được gửi qua email.' : 'Email này đã đăng ký trước đó.'));
       if (nextStatus === 'success') resetTimer.current = window.setTimeout(() => { setEmail(''); setStatus('idle'); setMessage(''); }, 4000);
-    } catch {
+    } catch (requestError) {
       setStatus('error');
-      setMessage('Không thể đăng ký, vui lòng thử lại.');
+      if (requestError.code === 'ECONNABORTED') {
+        setMessage('Máy chủ email phản hồi quá chậm. Vui lòng thử lại sau.');
+      } else {
+        setMessage(requestError.response?.data?.message || 'Không thể kết nối máy chủ để đăng ký.');
+      }
     } finally {
       setLoading(false);
     }

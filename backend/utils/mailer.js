@@ -2,6 +2,10 @@ const nodemailer = require('nodemailer');
 
 let transporter;
 
+function hasMailTransport() {
+  return Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST);
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -22,6 +26,9 @@ function getTransporter() {
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT || 587),
       secure: process.env.SMTP_SECURE === 'true',
+      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 8000),
+      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 8000),
+      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 12000),
     };
     if (process.env.SMTP_USER) {
       options.auth = { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS };
@@ -31,22 +38,60 @@ function getTransporter() {
   return transporter;
 }
 
-exports.sendPasswordReset = async ({ to, name, resetUrl }) => {
+async function sendWithResend(message) {
+  const attachments = (message.attachments || []).map((attachment) => ({
+    filename: attachment.filename,
+    content: Buffer.isBuffer(attachment.content)
+      ? attachment.content.toString('base64')
+      : attachment.content,
+  }));
+  const payload = {
+    from: process.env.RESEND_FROM || process.env.MAIL_FROM || 'ShopLite <onboarding@resend.dev>',
+    to: Array.isArray(message.to) ? message.to : [message.to],
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  };
+  if (message.replyTo) payload.reply_to = message.replyTo;
+  if (attachments.length) payload.attachments = attachments;
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`Resend rejected email (${response.status}): ${details}`);
+  }
+}
+
+async function sendMail(message) {
+  if (process.env.RESEND_API_KEY) return sendWithResend(message);
   const client = getTransporter();
   if (!client) return false;
-  await client.sendMail({
+  await client.sendMail(message);
+  return true;
+}
+
+exports.sendPasswordReset = async ({ to, name, resetUrl }) => {
+  if (!hasMailTransport()) return false;
+  return sendMail({
     from: process.env.MAIL_FROM || 'ShopLite <no-reply@shoplite.vn>',
     to,
     subject: 'Đặt lại mật khẩu ShopLite',
     text: `Xin chào ${name}, mở liên kết sau để đặt lại mật khẩu trong vòng 30 phút: ${resetUrl}`,
     html: `<p>Xin chào <strong>${name}</strong>,</p><p>Bạn vừa yêu cầu đặt lại mật khẩu ShopLite.</p><p><a href="${resetUrl}">Đặt lại mật khẩu</a></p><p>Liên kết có hiệu lực trong 30 phút. Nếu không thực hiện yêu cầu này, bạn có thể bỏ qua email.</p>`,
   });
-  return true;
 };
 
 exports.sendNotification = async ({ to, name, title, message, actionUrl }) => {
-  const client = getTransporter();
-  if (!client || !to) return false;
+  if (!hasMailTransport() || !to) return false;
   const safeName = escapeHtml(name || 'bạn');
   const safeTitle = escapeHtml(title);
   const safeMessage = escapeHtml(message);
@@ -54,19 +99,17 @@ exports.sendNotification = async ({ to, name, title, message, actionUrl }) => {
     ? `<p><a href="${escapeHtml(actionUrl)}" style="display:inline-block;padding:10px 16px;color:#fff;background:#105e4a;border-radius:6px;text-decoration:none">Xem chi tiết</a></p>`
     : '';
 
-  await client.sendMail({
+  return sendMail({
     from: process.env.MAIL_FROM || 'ShopLite <no-reply@shoplite.vn>',
     to,
     subject: `[ShopLite] ${title}`,
     text: `Xin chào ${name || 'bạn'},\n\n${title}\n${message}${actionUrl ? `\n\nXem chi tiết: ${actionUrl}` : ''}`,
     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#17211d"><p>Xin chào <strong>${safeName}</strong>,</p><h1 style="font-size:22px">${safeTitle}</h1><p>${safeMessage}</p>${action}<p>ShopLite</p></div>`,
   });
-  return true;
 };
 
 exports.sendContactMessage = async ({ name, email, phone, subject, order_id: orderId, message, attachments = [] }) => {
-  const client = getTransporter();
-  if (!client) return false;
+  if (!hasMailTransport()) return false;
   const subjectLabels = {
     order: 'Đơn hàng',
     payment: 'Thanh toán',
@@ -76,7 +119,7 @@ exports.sendContactMessage = async ({ name, email, phone, subject, order_id: ord
     other: 'Khác',
   };
   const subjectLabel = subjectLabels[subject] || subject;
-  await client.sendMail({
+  return sendMail({
     from: process.env.MAIL_FROM || 'ShopLite <no-reply@shoplite.vn>',
     to: process.env.SUPPORT_EMAIL || process.env.SMTP_USER,
     replyTo: email,
@@ -84,17 +127,15 @@ exports.sendContactMessage = async ({ name, email, phone, subject, order_id: ord
     text: `Phân loại: ${subjectLabel}\nMã đơn: ${orderId || 'Không cung cấp'}\nKhách hàng: ${name}\nEmail: ${email}\nĐiện thoại: ${phone || 'Không cung cấp'}\n\n${message}`,
     attachments,
   });
-  return true;
 };
 
 exports.sendNewsletterVoucher = async ({ to, code, discountValue, minOrderAmount, maxDiscountAmount, expiresAt }) => {
-  const client = getTransporter();
-  if (!client) return false;
+  if (!hasMailTransport()) return false;
   const expires = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'long' }).format(new Date(expiresAt));
   const minimum = formatCurrency(minOrderAmount);
   const maximum = formatCurrency(maxDiscountAmount);
 
-  await client.sendMail({
+  return sendMail({
     from: process.env.MAIL_FROM || 'ShopLite <no-reply@shoplite.vn>',
     to,
     subject: `Voucher chào mừng ${discountValue}% từ ShopLite`,
@@ -110,12 +151,10 @@ exports.sendNewsletterVoucher = async ({ to, code, discountValue, minOrderAmount
         <p>Hạn sử dụng: <strong>${expires}</strong>. Mã chỉ dùng một lần và chỉ áp dụng khi email nhận hàng là ${escapeHtml(to)}.</p>
       </div>`,
   });
-  return true;
 };
 
 exports.sendOrderConfirmation = async (order) => {
-  const client = getTransporter();
-  if (!client) return false;
+  if (!hasMailTransport()) return false;
 
   const paymentLabels = {
     cod: 'Thanh toán khi nhận hàng',
@@ -131,7 +170,7 @@ exports.sendOrderConfirmation = async (order) => {
       <td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right">${formatCurrency(Number(item.price) * Number(item.qty))}</td>
     </tr>`).join('');
 
-  await client.sendMail({
+  return sendMail({
     from: process.env.MAIL_FROM || 'ShopLite <no-reply@shoplite.vn>',
     to: order.customer_email,
     subject: `Xác nhận đơn hàng ShopLite #${order.id}`,
@@ -158,5 +197,4 @@ exports.sendOrderConfirmation = async (order) => {
         <p>Cảm ơn bạn đã mua sắm tại ShopLite.</p>
       </div>`,
   });
-  return true;
 };
