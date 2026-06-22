@@ -69,6 +69,8 @@ async function sendWithResend(message) {
     const details = await response.text();
     throw new Error(`Resend rejected email (${response.status}): ${details}`);
   }
+
+  return true;
 }
 
 async function sendMail(message) {
