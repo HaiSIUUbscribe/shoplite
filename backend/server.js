@@ -104,7 +104,11 @@ app.use(errorHandler);
 const PORT = Number(process.env.PORT || 3600);
 if (require.main === module) {
   app.listen(PORT, () => {
+    let mailTransport = 'not configured';
+    if (process.env.RESEND_API_KEY) mailTransport = 'resend';
+    else if (process.env.SMTP_HOST) mailTransport = 'smtp';
     console.log(`ShopLite API listening on port ${PORT}`);
+    console.log(`[server] Mail transport: ${mailTransport}`);
     cleanupJob.start();
   });
 }
