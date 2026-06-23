@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Col, Container, Row } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
@@ -13,12 +13,23 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    productService.list({ sort: 'newest' })
-      .then(setProducts)
-      .catch(() => setError('Chưa thể tải sản phẩm. Vui lòng thử lại sau.'))
-      .finally(() => setLoading(false));
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const data = await productService.list({ sort: 'newest' });
+      setProducts(data);
+    } catch {
+      setError('Chưa thể tải sản phẩm. Máy chủ có thể đang khởi động, vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
 
   const categories = useMemo(() => {
     const grouped = new Map();
@@ -38,7 +49,12 @@ export default function Home() {
     <CategoryShowcase categories={categories} />
     <section className="product-section"><Container>
       <div className="section-heading"><div><span>Vừa lên kệ</span><h2>Sản phẩm mới nhất</h2></div><Button as={Link} to="/products" variant="outline-dark">Xem tất cả <i className="bi bi-arrow-right ms-2" /></Button></div>
-      {error && <Alert variant="danger">{error}</Alert>}
+      {error && <Alert variant="danger" className="d-flex align-items-center justify-content-between gap-3">
+        <span>{error}</span>
+        <Button variant="outline-danger" size="sm" onClick={loadProducts} disabled={loading}>
+          Thử lại
+        </Button>
+      </Alert>}
       {!loading && !error && !products.length && <div className="empty-state"><i className="bi bi-box-seam" /><h3>Gian hàng đang được cập nhật</h3></div>}
       <Row className="g-4">{products.slice(0, 8).map((product) => <Col key={product.id} xl={3} md={4} sm={6}><ProductCard product={product} /></Col>)}</Row>
     </Container></section>

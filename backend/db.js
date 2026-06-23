@@ -12,6 +12,9 @@ const pool = mysql.createPool({
   charset: 'utf8mb4',
   ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
   decimalNumbers: true,
+  connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || 20000),
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0,
 });
 
 module.exports = pool;

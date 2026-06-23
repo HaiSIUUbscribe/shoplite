@@ -102,7 +102,28 @@ app.use(notFound);
 app.use(errorHandler);
 
 const PORT = Number(process.env.PORT || 3600);
-if (require.main === module) {
+const DATABASE_STARTUP_ATTEMPTS = 3;
+
+const delay = (duration) => new Promise((resolve) => setTimeout(resolve, duration));
+
+async function warmDatabaseConnection() {
+  for (let attempt = 1; attempt <= DATABASE_STARTUP_ATTEMPTS; attempt += 1) {
+    try {
+      await db.query('SELECT 1');
+      console.log('[server] Database connection ready');
+      return;
+    } catch (error) {
+      console.error(`[server] Database connection attempt ${attempt} failed:`, error.message);
+      if (attempt < DATABASE_STARTUP_ATTEMPTS) await delay(attempt * 1000);
+    }
+  }
+
+  console.warn('[server] Starting without a ready database connection; health checks will report its status.');
+}
+
+async function startServer() {
+  await warmDatabaseConnection();
+
   app.listen(PORT, () => {
     let mailTransport = 'not configured';
     if (process.env.RESEND_API_KEY) mailTransport = 'resend';
@@ -110,6 +131,13 @@ if (require.main === module) {
     console.log(`ShopLite API listening on port ${PORT}`);
     console.log(`[server] Mail transport: ${mailTransport}`);
     cleanupJob.start();
+  });
+}
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error('[server] Startup failed:', error);
+    process.exit(1);
   });
 }
 

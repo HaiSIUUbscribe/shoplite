@@ -1,11 +1,42 @@
 import axios from 'axios';
 
+const API_TIMEOUT = Number(process.env.REACT_APP_API_TIMEOUT_MS || 30000);
+const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
+
 const axiosClient = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3600/api',
   headers: { 'Content-Type': 'application/json' },
-  timeout: 15000,
+  timeout: API_TIMEOUT,
   withCredentials: true,
 });
+
+function wait(delay) {
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+function canRetryGet(error) {
+  const config = error.config;
+  if (!config) return false;
+  if (String(config?.method || 'get').toLowerCase() !== 'get') return false;
+  if (axios.isCancel(error) || error.code === 'ERR_CANCELED') return false;
+
+  const status = error.response?.status;
+  return !error.response || RETRYABLE_STATUS_CODES.has(status);
+}
+
+async function retryGet(error) {
+  if (!canRetryGet(error)) return null;
+
+  const config = error.config;
+  const retryCount = Number(config._networkRetryCount || 0);
+  // Network timeouts get one retry; transient gateway responses can recover faster.
+  const maxRetries = error.response ? 2 : 1;
+  if (retryCount >= maxRetries) return null;
+
+  config._networkRetryCount = retryCount + 1;
+  await wait(1200 * config._networkRetryCount);
+  return axiosClient(config);
+}
 
 // ── Shared refresh promise ────────────────────────────────────
 // Nếu nhiều request đồng thời nhận 401, chúng sẽ dùng chung một
@@ -18,7 +49,7 @@ function callRefresh() {
       .post(
         `${axiosClient.defaults.baseURL}/auth/refresh`,
         {},
-        { withCredentials: true, timeout: 15000 }
+        { withCredentials: true, timeout: API_TIMEOUT }
       )
       .then((res) => {
         localStorage.setItem('token', res.data.token);
@@ -81,6 +112,9 @@ axiosClient.interceptors.response.use(
     } else if (error.response?.status === 401 && isRefreshRequest) {
       localStorage.removeItem('token');
     }
+
+    const retriedResponse = await retryGet(error);
+    if (retriedResponse) return retriedResponse;
 
     return Promise.reject(error);
   }
